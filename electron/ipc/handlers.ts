@@ -7,6 +7,14 @@ import type { CancelRegistry } from '../infra/cancel-registry'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
 
+/** 主进程窗口能力；无窗口环境（集成测试、无头 CLI）不注入，走空实现 */
+export interface WindowControls {
+  minimize: () => void
+  toggleMaximize: () => boolean
+  close: () => void
+  isMaximized: () => boolean
+}
+
 export interface HandlerDeps {
   repos: Repos
   flow: RequestFlow
@@ -15,6 +23,7 @@ export interface HandlerDeps {
   hello: AppHello
   /** 每次握手实时读取，底栏显示当前库大小（06 号文档 §4） */
   dbSize: () => number
+  window?: WindowControls
 }
 
 /** 存在性校验：缺失即 NOT_FOUND（19 号文档 §2.1 的 UI 错误分流依赖 code） */
@@ -31,6 +40,12 @@ const invalid = (message: string): never => {
 
 export function buildHandlers(deps: HandlerDeps): HandlerMap {
   const { repos } = deps
+  const win = deps.window ?? {
+    minimize: () => {},
+    toggleMaximize: () => false,
+    close: () => {},
+    isMaximized: () => false,
+  }
 
   const requireProject = (id: string) => must(repos.project.get(id), '项目')
   const requireCollection = (id: string) => must(repos.collection.get(id), '集合')
@@ -177,6 +192,15 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     },
     'runner:get': (req) => must(deps.repos.runner.get(req.id), '运行记录'),
     'runner:list': (req) => deps.repos.runner.list(req.limit ?? 20),
+
+    'window:get-state': () => ({ maximized: win.isMaximized() }),
+    'window:minimize': () => {
+      win.minimize()
+    },
+    'window:toggle-maximize': () => ({ maximized: win.toggleMaximize() }),
+    'window:close': () => {
+      win.close()
+    },
   }
 
   return handlers

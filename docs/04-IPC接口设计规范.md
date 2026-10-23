@@ -92,12 +92,18 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-rules` / `notify:set-rules` / `notify:test-webhook` / `event:notify` | 见 15 号文档 §6 | |
 | `ai:get-config` / `ai:set-config` / `ai:test-connection` / `ai:gen-api` / `ai:gen-script` / `ai:gen-schema` / `ai:explain-failure` / `ai:explain-load` / `ai:interpret-md` / `ai:adopt` / `ai:call-log` | 见 16 号文档 §5 | |
 
-### 3.6 应用与握手
+### 3.6 应用、窗口与握手
 | Channel | 入参 | 返回 |
 |---|---|---|
 | `app:hello` | `{}` | `{mainVersion, schemaVersion, channelsHash, platform, dbSizeBytes}` |
+| `window:get-state` | `{}` | `{maximized}` |
+| `window:minimize` | `{}` | `{}` |
+| `window:toggle-maximize` | `{}` | `{maximized}`（切换后的目标状态） |
+| `window:close` | `{}` | `{}`（等价标题栏关闭；Windows 上最后一个窗口关闭即退出） |
 
 `dbSizeBytes` 为主库文件当前字节数（内存库为 0），底栏 DB 大小每次握手/刷新时读取；`platform` 供兼容性提示与 14 号文档的多平台文案。
+
+窗口通道只服务无边框自绘标题栏（Windows，06 号文档 §4）。无窗口环境（集成测试、无头 CLI）不注入 `WindowControls`，四个通道返回空实现（`maximized=false`），保证同一套 `ChannelMap` 在测试进程可调用。窗口真实最大化状态以 `event:window-state` 为准：拖拽区双击、`Win+↑`、系统贴边等路径不经过 `window:toggle-maximize`，也必须在 300ms 内同步到标题栏图标。
 
 ### 3.7 事件（主进程 → 渲染进程）
 | Channel | 载荷 | 时机 |
@@ -105,6 +111,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `event:send-progress` | `{cancelId, phase:'script'\|'sending'\|'receiving'}` | 请求进行中 |
 | `event:runner-progress` | `{runId, item: RunnerItem}` | 每完成一项 |
 | `event:script-log` | `{source:'pre'\|'post'\|'test', level, text, ts}` | 脚本 console 输出 |
+| `event:window-state` | `{maximized}` | 最大化 / 还原（含系统路径触发） |
 
 ## 4. 核心类型：SendResult
 

@@ -9,7 +9,7 @@ import { RequestFlow } from './flow/request'
 import { RunnerFlow } from './flow/runner'
 import { ScriptVM } from './script/vm'
 import { channelsHashOf, type HandlerMap } from './ipc/router'
-import { buildHandlers } from './ipc/handlers'
+import { buildHandlers, type WindowControls } from './ipc/handlers'
 import type { AppHello, ChannelName, EventName, EventPayload, ReqOf, ResOf } from '@shared/channels'
 
 export interface Kernel {
@@ -37,6 +37,8 @@ export interface KernelOptions {
   scriptWorkerPath?: string
   /** 无窗口场景（集成测试、无头 CLI）不下发事件 */
   emit?: (channel: string, payload: unknown) => void
+  /** 无边框窗口控制；无窗口场景不注入，window:* 通道为空实现 */
+  window?: WindowControls
 }
 
 /** 主进程能力内核：与 BrowserWindow / electron API 解耦，集成测试可直接驱动（17 号文档 §1） */
@@ -72,7 +74,15 @@ export function createKernel(options: KernelOptions): Kernel {
     dbSizeBytes: dbSize(),
   }
 
-  const handlers = buildHandlers({ repos, flow, runner, cancel, hello, dbSize })
+  const handlers = buildHandlers({
+    repos,
+    flow,
+    runner,
+    cancel,
+    hello,
+    dbSize,
+    window: options.window,
+  })
 
   const invoke = async <K extends ChannelName>(channel: K, req: ReqOf<K>): Promise<ResOf<K>> =>
     (handlers[channel] as (r: ReqOf<K>) => ResOf<K> | Promise<ResOf<K>>)(req)

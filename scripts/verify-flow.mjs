@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -633,6 +633,101 @@ try {
   await app.send('Emulation.clearDeviceMetricsOverride')
   await wait(300)
 
+  // ── 无边框窗口 + 自绘标题栏（06 号文档 §4）──
+  // Electron 未实现 CDP Browser.getWindowForTarget，改问 Win32 GetWindowPlacement
+  const windowState = () => {
+    try {
+      return execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          resolve(root, 'scripts/window-state.ps1'),
+          '-ProcessId',
+          String(child.pid),
+          '-Action',
+          'state',
+        ],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      ).trim()
+    } catch {
+      return 'no-window'
+    }
+  }
+  const waitWindowState = async (expected, label) => {
+    let last = ''
+    for (let i = 0; i < 40; i++) {
+      last = windowState()
+      if (last === expected) return true
+      await wait(150)
+    }
+    throw new Error(`窗口状态未变为 ${expected}（实际 ${last}）：${label}`)
+  }
+
+  await waitWindowState('normal', '初始窗口')
+  report.windowInitial = windowState()
+  report.titlebar = await app.js(`(() => {
+    const bar = document.querySelector('[data-testid="titlebar"]')
+    if (!bar) return null
+    const controls = bar.querySelector('.titlebar-controls')
+    return {
+      height: Math.round(bar.getBoundingClientRect().height),
+      drag: getComputedStyle(bar).getPropertyValue('-webkit-app-region'),
+      controlsDrag: getComputedStyle(controls).getPropertyValue('-webkit-app-region'),
+      buttons: [...controls.querySelectorAll('button')].map((b) => ({
+        title: b.title,
+        radius: getComputedStyle(b).borderRadius,
+        size: Math.round(b.getBoundingClientRect().width)
+      }))
+    }
+  })()`)
+  if (!report.titlebar) throw new Error('Windows 下未渲染自绘标题栏')
+  if (report.titlebar.height !== 40) throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
+  if (report.titlebar.drag !== 'drag' || report.titlebar.controlsDrag !== 'no-drag') {
+    throw new Error(`标题栏拖拽区不符：${JSON.stringify(report.titlebar)}`)
+  }
+  if (report.titlebar.buttons.length !== 3) {
+    throw new Error(`窗口控件数量不符：${report.titlebar.buttons.length}`)
+  }
+  if (report.titlebar.buttons.some((b) => b.radius !== '999px' || b.size !== 30 || !b.title)) {
+    throw new Error(`窗口控件规格不符：${JSON.stringify(report.titlebar.buttons)}`)
+  }
+
+  await app.js(`window.__h.click('最大化')`)
+  await app.waitFor(`!!document.querySelector('.win-btn[title="还原"]')`, '最大化后图标切到还原')
+  await waitWindowState('maximized', '标题栏最大化')
+  report.windowMaximized = windowState()
+  const maxShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(resolve(root, '.tmp/toapi-titlebar.png'), Buffer.from(maxShot.data, 'base64'))
+
+  await app.js(`window.__h.click('还原')`)
+  await app.waitFor(`!!document.querySelector('.win-btn[title="最大化"]')`, '还原后图标切回最大化')
+  await waitWindowState('normal', '标题栏还原')
+  report.windowRestored = windowState()
+
+  await app.js(`window.__h.click('最小化')`)
+  await waitWindowState('minimized', '标题栏最小化')
+  report.windowMinimized = windowState()
+  execFileSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      resolve(root, 'scripts/window-state.ps1'),
+      '-ProcessId',
+      String(child.pid),
+      '-Action',
+      'restore',
+    ],
+    { encoding: 'utf8' },
+  )
+  await waitWindowState('normal', 'Win32 恢复窗口')
+  await app.waitFor(`!!document.querySelector('.win-btn[title="最大化"]')`, '恢复后标题栏可用')
+
   report.runtimeErrorsRound1 = app.errors
   await closeApp(app)
   app.ws.close()
@@ -682,11 +777,22 @@ try {
   const shot2 = await app.send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(resolve(root, '.tmp/toapi-flow-2.png'), Buffer.from(shot2.data, 'base64'))
   report.runtimeErrorsRound2 = app.errors
+
+  // 关闭也走自绘标题栏：应等价原生关闭并退出进程（Windows 最后一窗）
+  await app.js(`window.__h.click('关闭 (Alt+F4)')`)
+  for (let i = 0; i < 40 && child && child.exitCode === null; i++) await wait(150)
+  report.closedViaTitlebar = child?.exitCode !== null
+  if (!report.closedViaTitlebar) throw new Error('标题栏关闭未退出应用')
   app.ws.close()
 } finally {
   await closeApp()
   echo.close()
 }
 
-report.screenshots = ['.tmp/toapi-flow-1.png', '.tmp/toapi-flow-2.png', '.tmp/toapi-select.png']
+report.screenshots = [
+  '.tmp/toapi-flow-1.png',
+  '.tmp/toapi-flow-2.png',
+  '.tmp/toapi-select.png',
+  '.tmp/toapi-titlebar.png',
+]
 console.log(JSON.stringify(report, null, 2))

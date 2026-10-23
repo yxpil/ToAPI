@@ -70,6 +70,79 @@ textarea:focus-visible {
   height: 100%;
 }
 
+/* 一体化标题栏（06 号文档 §4）：整条拖拽，窗口控制药丸 no-drag */
+.titlebar {
+  flex: none;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-1) 0 var(--sp-3);
+  background: var(--bg);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.brand-mark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.brand-tag {
+  font-size: 12px;
+  color: var(--ink-tertiary);
+  white-space: nowrap;
+}
+.titlebar-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+.win-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.win-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.win-btn.close:hover {
+  background: var(--err);
+  color: var(--bg);
+}
+@media (max-width: 1100px) {
+  .brand-tag {
+    display: none;
+  }
+}
+
 .shell {
   display: flex;
   flex: 1;
@@ -1052,6 +1125,10 @@ kbd {
 }
 .toast.error {
   background: var(--ink);
+}
+/* 无边框标题栏下 Toast 让开拖拽区，距标题栏下沿仍是 16px */
+.titlebar ~ .toast {
+  top: calc(40px + var(--sp-4));
 }
 .cancel-float {
   position: fixed;

@@ -4,7 +4,8 @@ import type { AppHello } from '@shared/channels'
 import type { ProjectNode, TreeCollectionNode } from '@shared/types'
 import { useApp } from './stores/app.store'
 import { useRunner } from './stores/runner.store'
-import { invoke } from './lib/ipc'
+import { useWindow } from './stores/window.store'
+import { invoke, useEvent } from './lib/ipc'
 import { formatBytes } from './lib/format'
 import { loadPref, savePref } from './lib/prefs'
 import { TreePane } from './features/tree/TreePane'
@@ -34,6 +35,49 @@ const locateApi = (
     }
   }
   return null
+}
+
+/** 无边框窗口自绘标题栏（06 号文档 §4）：整条可拖拽，右侧窗口控制药丸 */
+function TitleBar() {
+  const { maximized, init, setMaximized, minimize, toggleMaximize, close } = useWindow()
+
+  useEffect(() => {
+    void init()
+  }, [init])
+  useEvent('event:window-state', (state) => setMaximized(state.maximized))
+
+  return (
+    <header className="titlebar" data-testid="titlebar">
+      <div className="titlebar-brand">
+        <span className="brand-mark" aria-hidden="true">
+          <Icon name="send" size={14} />
+        </span>
+        <span className="brand-name">ToAPI</span>
+        <span className="brand-tag">本地 API 工作台</span>
+      </div>
+      <nav className="titlebar-controls" aria-label="窗口控制">
+        <button className="win-btn" title="最小化" aria-label="最小化窗口" onClick={minimize}>
+          <Icon name="minus" size={14} />
+        </button>
+        <button
+          className="win-btn"
+          title={maximized ? '还原' : '最大化'}
+          aria-label={maximized ? '还原窗口' : '最大化窗口'}
+          onClick={() => void toggleMaximize()}
+        >
+          <Icon name={maximized ? 'restore' : 'maximize'} size={14} />
+        </button>
+        <button
+          className="win-btn close"
+          title="关闭 (Alt+F4)"
+          aria-label="关闭窗口"
+          onClick={close}
+        >
+          <Icon name="cross" size={14} />
+        </button>
+      </nav>
+    </header>
+  )
 }
 
 function StatusBar({ hello }: { hello: AppHello | null }) {
@@ -228,6 +272,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {hello?.platform === 'win32' && <TitleBar />}
       <div
         className="shell"
         ref={shellRef}

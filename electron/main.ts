@@ -6,6 +6,8 @@ import { createLogger } from './infra/logger'
 
 const log = createLogger('main')
 const devUrl = process.env.VITE_DEV_SERVER_URL
+/** Windows 用无边框窗口 + 自绘标题栏（06 号文档 §4）；其他平台保留系统原生装饰 */
+const FRAMELESS = process.platform === 'win32'
 
 let win: BrowserWindow | null = null
 let kernel: Kernel | null = null
@@ -22,6 +24,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#FFFFFF',
+    frame: !FRAMELESS,
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
@@ -38,6 +41,14 @@ function createWindow(): void {
     void shell.openExternal(url)
     return { action: 'deny' }
   })
+  // 拖拽区双击与 Win+↑ 等系统路径也会改变最大化状态，统一回推给标题栏
+  const emitWindowState = (): void => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('event:window-state', { maximized: win.isMaximized() })
+    }
+  }
+  win.on('maximize', emitWindowState)
+  win.on('unmaximize', emitWindowState)
   win.on('closed', () => {
     win = null
   })
@@ -58,6 +69,18 @@ void app.whenReady().then(() => {
     appVersion: app.getVersion(),
     scriptWorkerPath: join(__dirname, 'script-worker.cjs'),
     emit: (channel, payload) => win?.webContents.send(channel, payload),
+    window: {
+      minimize: () => win?.minimize(),
+      toggleMaximize: () => {
+        if (!win) return false
+        const next = !win.isMaximized()
+        if (next) win.maximize()
+        else win.unmaximize()
+        return next
+      },
+      close: () => win?.close(),
+      isMaximized: () => win?.isMaximized() ?? false,
+    },
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })
   log.info('kernel ready', kernel.hello)

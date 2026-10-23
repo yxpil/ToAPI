@@ -158,6 +158,11 @@ export interface RunnerStartInput {
   delayMs?: number
 }
 
+/** 无边框窗口的最大化状态（06 号文档 §4） */
+export interface WindowState {
+  maximized: boolean
+}
+
 export interface RunnerItemView {
   id: string
   runId: string
@@ -218,6 +223,10 @@ export interface ChannelMap {
   'runner:cancel': { req: { runId: string }; res: void }
   'runner:get': { req: IdInput; res: RunnerRunView }
   'runner:list': { req: { limit?: number }; res: Omit<RunnerRunView, 'items'>[] }
+  'window:get-state': { req: Record<string, never>; res: WindowState }
+  'window:minimize': { req: Record<string, never>; res: void }
+  'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
+  'window:close': { req: Record<string, never>; res: void }
 }
 
 export interface AppHello {
@@ -258,6 +267,10 @@ export const CHANNELS = [
   'runner:cancel',
   'runner:get',
   'runner:list',
+  'window:get-state',
+  'window:minimize',
+  'window:toggle-maximize',
+  'window:close',
 ] as const satisfies readonly (keyof ChannelMap)[]
 
 export type ChannelName = (typeof CHANNELS)[number]
@@ -273,11 +286,14 @@ export type ResOf<K extends ChannelName> = ChannelMap[K]['res']
 export interface EventMap {
   'event:send-progress': { cancelId: string; phase: 'script' | 'sending' | 'receiving' }
   'event:runner-progress': { runId: string; item: RunnerItemView; finished: boolean }
+  /** 最大化/还原后同步标题栏图标；双击拖拽区触发的系统行为也要覆盖 */
+  'event:window-state': WindowState
 }
 
 export const EVENT_CHANNELS = [
   'event:send-progress',
   'event:runner-progress',
+  'event:window-state',
 ] as const satisfies readonly (keyof EventMap)[]
 
 export type EventName = (typeof EVENT_CHANNELS)[number]

@@ -168,4 +168,8 @@ export const INPUT_SCHEMAS = {
   'runner:cancel': z.object({ runId: idSchema }),
   'runner:get': z.object({ id: idSchema }),
   'runner:list': z.object({ limit: z.number().int().min(1).max(100).optional() }),
+  'window:get-state': empty,
+  'window:minimize': empty,
+  'window:toggle-maximize': empty,
+  'window:close': empty,
 } satisfies Record<ChannelName, z.ZodType>

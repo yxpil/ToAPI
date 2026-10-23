@@ -55,11 +55,11 @@ AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失
 | M2 变量与环境 | **已完成并验证** | `{{var}}` 全链路插值、runtime/环境/全局三级优先、循环引用检测、环境切换与状态栏变量编辑 |
 | M3 脚本引擎 | **已完成并验证** | worker + vm 双层隔离沙箱；`toapi.request`(含 setHeader/setBody/skip/send 子请求)、`vars/env/globals`、`fake.*`、`test/expect`、`log`、md5/sha256/hmac/base64/uuid/timestamp/sleep；5s 熔断（同步 vm timeout + 异步 terminate）、子请求深度 8 / 总数 50 |
 | M4 联合请求 | **已完成并验证** | 声明式提取器 + 脚本式链式；集合 Runner（顺序执行、运行时变量跨接口传递、stopOnFail、逐项断言、进度事件、运行记录持久化）+ Runner 面板 |
-| UI 规范适配 | **已完成并验证** | 三栏可拖宽（记忆栏宽/分屏方向）、上下分屏、底栏 DB 大小与版本、右键菜单 + 拖拽排序 + 删除确认、Ctrl+K 命令面板、响应状态行、历史虚拟滚动/分组/搜索/加载更多、检查/叉号 SVG 反馈、Toast 与空态 |
+| UI 规范适配 | **已完成并验证** | Windows 无边框窗口 + 一体化自绘标题栏（拖拽区、最小化/最大化/还原/关闭药丸）、三栏可拖宽（记忆栏宽/分屏方向）、上下分屏、底栏 DB 大小与版本、右键菜单 + 拖拽排序 + 删除确认、Ctrl+K 命令面板、响应状态行、历史虚拟滚动/分组/搜索/加载更多、检查/叉号 SVG 反馈、Toast 与空态 |
 | M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；批量报告导出待做 |
 | M5.5–M8 | 未开始 | TAPI、MD 文档、开放调用/MCP、定时与压测、国际化与多平台 |
 
-**已发布 v0.1.3**：`ToAPI-Setup-0.1.3-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.3-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.3 把原生直角下拉替换为定制弹层：白底、10px 圆角、无阴影，选项 28px 药丸，选中黑底白字，箭头展开时旋转。v0.1.2 已按 06/07/21 号文档补齐三栏拖拽与分屏偏好、右键菜单/确认框/拖拽排序、命令面板、响应状态行、历史虚拟滚动与搜索、底栏 DB 大小，并修掉草稿接口空 URL 无法保存。1024×640 下 URL 输入实测 241px。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
+**已发布 v0.1.4**：`ToAPI-Setup-0.1.4-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.4-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.4 把 Windows 原生标题栏与网页合成一体：`frame:false` 无边框、40px 自绘标题栏整条可拖拽，右侧三枚 30px 药丸控制窗口，最大化图标随 `event:window-state` 实时切换，关闭也走同一套 IPC；Linux/信创仍保留系统原生窗口装饰。v0.1.3 把原生直角下拉替换为定制弹层（10px 圆角、选项 999px 药丸），v0.1.2 补齐三栏拖拽与分屏偏好、右键菜单/确认框/拖拽排序、命令面板、响应状态行、历史虚拟滚动与搜索、底栏 DB 大小。1024×640 下 URL 输入实测 241px。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
 
 ### 已跑过的验证（不是声明，是实测）
 
@@ -69,7 +69,7 @@ node scripts/verify-flow.mjs             # CDP 驱动真机：建项目→建接
 node scripts/smoke-package.mjs <exe 路径>  # 打包产物冷启动冒烟
 ```
 
-真机验证要点（`scripts/verify-flow.mjs` 输出）：状态行 `200 OK · Nms · 112 B`、脚本两条断言通过、两个接口的集合 Runner 输出「默认集合 · 2/2 项 · 通过率 100%」、query 送达靶场；右键菜单 10px/无阴影、下拉弹层 10px/无阴影/选项 999px、删除确认文案、拖拽排序、栏宽 300→240 与上下/左右分屏全部持久化；1024×640 三栏不重叠且 URL 241px；字体仅 12/13/14、按钮全部 999px 且带 title、渐变/投影计数 0、JSON 三色正确；DOM emoji 0、两轮 console 错误 0。
+真机验证要点（`scripts/verify-flow.mjs` 输出）：状态行 `200 OK · Nms · 112 B`、脚本两条断言通过、两个接口的集合 Runner 输出「默认集合 · 2/2 项 · 通过率 100%」、query 送达靶场；右键菜单 10px/无阴影、下拉弹层 10px/无阴影/选项 999px、删除确认文案、拖拽排序、栏宽 300→240 与上下/左右分屏全部持久化；1024×640 三栏不重叠且 URL 241px；标题栏 40px 且 `drag`、控件 `no-drag`、三枚 30px 药丸均带 title，点击最大化/还原/最小化后由 Win32 `GetWindowPlacement` 实测 `maximized → normal → minimized`，关闭按钮真实退出进程；字体仅 12/13/14、按钮全部 999px 且带 title、渐变/投影计数 0、JSON 三色正确；DOM emoji 0、两轮 console 错误 0。
 
 ### 运行
 

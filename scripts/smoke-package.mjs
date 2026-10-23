@@ -113,6 +113,14 @@ const report = {
   pillRadius: await js(
     `document.querySelector('.pill') ? getComputedStyle(document.querySelector('.pill')).borderRadius : null`,
   ),
+  titlebar: await js(`(() => {
+    const bar = document.querySelector('[data-testid="titlebar"]')
+    if (!bar) return null
+    return {
+      height: Math.round(bar.getBoundingClientRect().height),
+      buttons: bar.querySelectorAll('.win-btn').length
+    }
+  })()`),
   svgIcons: await js(`document.querySelectorAll('svg.icon').length`),
   emojiInDom: await js(
     `(document.body.innerText.match(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/gu) || []).length`,
@@ -127,7 +135,9 @@ const ok =
   report.handshake &&
   report.rootChildren > 0 &&
   report.pageErrors.length === 0 &&
-  report.emojiInDom === 0
+  report.emojiInDom === 0 &&
+  report.titlebar?.height === 40 &&
+  report.titlebar?.buttons === 3
 console.log(JSON.stringify({ ...report, verdict: ok ? 'PASS' : 'FAIL' }, null, 2))
 
 await wait(1500)
