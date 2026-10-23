@@ -12,6 +12,7 @@ electronDist: node_modules/electron/dist
 files:
   - dist/**
   - dist-electron/**
+  - electron/assets/**
   - package.json
 
 asar: true

@@ -24,6 +24,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#FFFFFF',
+    icon: join(__dirname, '../electron/assets/icon.png'),
     frame: !FRAMELESS,
     autoHideMenuBar: true,
     show: false,

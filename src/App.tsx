@@ -15,6 +15,7 @@ import { RunnerPane } from './features/runner/RunnerPane'
 import { Icon } from './components/Icon'
 import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
+import logoUrl from './assets/logo.png'
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max))
@@ -55,7 +56,7 @@ function TitleBar() {
     <header className="titlebar" data-testid="titlebar">
       <div className="titlebar-brand">
         <span className="brand-mark" aria-hidden="true">
-          <Icon name="send" size={14} />
+          <img className="brand-logo" src={logoUrl} alt="" draggable={false} />
         </span>
         <span className="brand-name">ToAPI</span>
       </div>

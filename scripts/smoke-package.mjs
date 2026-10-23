@@ -118,7 +118,11 @@ const report = {
     if (!bar) return null
     return {
       height: Math.round(bar.getBoundingClientRect().height),
-      buttons: bar.querySelectorAll('.win-btn').length
+      buttons: bar.querySelectorAll('.win-btn').length,
+      logo: (() => {
+        const img = bar.querySelector('.brand-logo')
+        return img ? { complete: img.complete, naturalWidth: img.naturalWidth } : null
+      })()
     }
   })()`),
   panels: await js(`(() => {
@@ -153,7 +157,9 @@ const ok =
   report.panels?.editor === '14px' &&
   report.panels?.response === '14px' &&
   report.titlebar?.height === 46 &&
-  report.titlebar?.buttons === 3
+  report.titlebar?.buttons === 3 &&
+  report.titlebar?.logo?.complete === true &&
+  report.titlebar?.logo?.naturalWidth > 0
 console.log(JSON.stringify({ ...report, verdict: ok ? 'PASS' : 'FAIL' }, null, 2))
 
 await wait(1500)

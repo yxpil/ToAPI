@@ -93,15 +93,19 @@ textarea:focus-visible {
   flex: none;
 }
 .brand-mark {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   flex: none;
-  border-radius: 7px;
-  background: var(--ink);
-  color: var(--bg-canvas);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.brand-logo {
+  width: 24px;
+  height: 24px;
+  display: block;
+  pointer-events: none;
+  user-select: none;
 }
 .brand-name {
   font-size: 13px;

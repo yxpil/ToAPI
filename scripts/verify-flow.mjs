@@ -742,6 +742,17 @@ try {
       height: Math.round(bar.getBoundingClientRect().height),
       drag: getComputedStyle(bar).getPropertyValue('-webkit-app-region'),
       controlsDrag: getComputedStyle(controls).getPropertyValue('-webkit-app-region'),
+      logo: (() => {
+        const img = bar.querySelector('.brand-logo')
+        if (!img) return null
+        const r = img.getBoundingClientRect()
+        return {
+          complete: img.complete,
+          naturalWidth: img.naturalWidth,
+          width: Math.round(r.width),
+          height: Math.round(r.height)
+        }
+      })(),
       buttons: [...controls.querySelectorAll('button')].map((b) => ({
         title: b.title,
         radius: getComputedStyle(b).borderRadius,
@@ -754,6 +765,15 @@ try {
   if (report.titlebar.height !== 46) throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
   if (report.titlebar.drag !== 'drag' || report.titlebar.controlsDrag !== 'no-drag') {
     throw new Error(`标题栏拖拽区不符：${JSON.stringify(report.titlebar)}`)
+  }
+  if (
+    !report.titlebar.logo ||
+    !report.titlebar.logo.complete ||
+    report.titlebar.logo.naturalWidth < 64 ||
+    report.titlebar.logo.width !== 24 ||
+    report.titlebar.logo.height !== 24
+  ) {
+    throw new Error(`品牌 LOGO 未正确加载：${JSON.stringify(report.titlebar.logo)}`)
   }
   if (report.titlebar.buttons.length !== 3) {
     throw new Error(`窗口控件数量不符：${report.titlebar.buttons.length}`)
