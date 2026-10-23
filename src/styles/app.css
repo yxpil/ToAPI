@@ -12,7 +12,7 @@ body,
 body {
   font: var(--font-ui);
   color: var(--ink);
-  background: var(--bg);
+  background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -32,22 +32,25 @@ button {
 }
 
 ::selection {
-  background: var(--bg-active);
+  background: rgba(22, 22, 24, 0.14);
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d8d8d8;
-  border: 3px solid transparent;
+  background: #d3d3d8;
+  border: 2px solid transparent;
   background-clip: content-box;
   border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c2c2c2;
+  background: #b9b9c0;
   background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* 焦点环（06 号文档 §3.1）：2px 墨色外描边，offset 2px */
@@ -68,46 +71,65 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--bg-canvas);
 }
 
-/* 一体化标题栏（06 号文档 §4）：整条拖拽，窗口控制药丸 no-drag */
+/* 一体化标题栏（06 号文档 §4）：整条拖拽，窗口控制 no-drag */
 .titlebar {
   flex: none;
-  height: 40px;
+  height: 46px;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: 0 var(--sp-1) 0 var(--sp-3);
-  background: var(--bg);
+  gap: 10px;
+  padding: 0 8px 0 12px;
+  background: var(--bg-canvas);
   -webkit-app-region: drag;
   user-select: none;
 }
 .titlebar-brand {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  min-width: 0;
+  gap: 8px;
+  flex: none;
 }
 .brand-mark {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: none;
-  border-radius: var(--radius-pill);
+  border-radius: 7px;
   background: var(--ink);
-  color: var(--bg);
+  color: var(--bg-canvas);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .brand-name {
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
-.brand-tag {
-  font-size: 12px;
+.titlebar-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-strong);
   color: var(--ink-tertiary);
+  font-size: 12px;
+}
+.crumb {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.crumb.current {
+  color: var(--ink-secondary);
+}
+.crumb-sep {
+  color: var(--ink-tertiary);
+  opacity: 0.6;
 }
 .titlebar-controls {
   margin-left: auto;
@@ -117,11 +139,11 @@ textarea:focus-visible {
   -webkit-app-region: no-drag;
 }
 .win-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--ink-secondary);
   display: inline-flex;
@@ -130,24 +152,27 @@ textarea:focus-visible {
   cursor: pointer;
 }
 .win-btn:hover {
-  background: var(--bg-hover);
+  background: rgba(22, 22, 24, 0.07);
   color: var(--ink);
 }
 .win-btn.close:hover {
   background: var(--err);
-  color: var(--bg);
+  color: #ffffff;
 }
-@media (max-width: 1100px) {
-  .brand-tag {
+@media (max-width: 900px) {
+  .titlebar-crumbs {
     display: none;
   }
 }
 
+/* 画布上浮起三块面板，间距即拖拽热区 */
 .shell {
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
+  gap: var(--gap-panel);
+  padding: 0 var(--gap-panel) var(--gap-panel);
 }
 
 .tree {
@@ -155,7 +180,9 @@ textarea:focus-visible {
   min-width: 180px;
   flex: none;
   overflow: auto;
-  background: var(--bg-subtle);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
 }
 
 .main-col {
@@ -163,6 +190,7 @@ textarea:focus-visible {
   display: flex;
   min-width: 0;
   min-height: 0;
+  gap: var(--gap-panel);
 }
 .main-col[data-orientation='right'] {
   flex-direction: row;
@@ -178,6 +206,10 @@ textarea:focus-visible {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  container-type: inline-size;
 }
 
 .response-col {
@@ -188,13 +220,16 @@ textarea:focus-visible {
   min-width: 320px;
   min-height: 0;
   overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  container-type: inline-size;
 }
 .main-col[data-orientation='bottom'] .response-col {
   width: auto;
   min-width: 0;
   height: var(--response-height, 45%);
   min-height: 180px;
-  border-top: 1px solid var(--line);
 }
 
 .response {
@@ -207,11 +242,13 @@ textarea:focus-visible {
 }
 
 .pane-switch {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
-  padding: var(--sp-3);
+  height: 48px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--line);
 }
 .pane-switch .segmented {
@@ -220,7 +257,7 @@ textarea:focus-visible {
 .pane-actions {
   display: flex;
   align-items: center;
-  gap: var(--sp-1);
+  gap: 2px;
 }
 
 .pane-body {
@@ -231,12 +268,11 @@ textarea:focus-visible {
 
 .statusbar {
   flex: none;
-  height: 22px;
-  border-top: 1px solid var(--line);
+  height: 30px;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: 0 var(--sp-3);
+  gap: 14px;
+  padding: 0 12px;
   font-size: 12px;
   color: var(--ink-secondary);
 }
@@ -249,50 +285,69 @@ textarea:focus-visible {
 .status-probe {
   margin-left: auto;
 }
+.statusbar .pill {
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  gap: 3px;
+}
+.statusbar .pill:hover {
+  background: rgba(22, 22, 24, 0.06);
+  color: var(--ink);
+}
 
-/* ── 分栏拖拽（06 号文档 §4）── */
+/* ── 分栏拖拽（06 号文档 §4）：无轨道，hover 才显出胶囊把手 ── */
 .splitter {
   position: relative;
   flex: none;
   z-index: 3;
+  background: transparent;
 }
 .splitter.vertical {
-  width: 5px;
+  width: var(--gap-panel);
   cursor: col-resize;
 }
 .splitter.horizontal {
-  height: 5px;
+  height: var(--gap-panel);
   cursor: row-resize;
 }
 .splitter::after {
   content: '';
   position: absolute;
-  background: var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background-color 120ms ease;
 }
 .splitter.vertical::after {
-  top: 0;
-  bottom: 0;
-  left: 2px;
-  width: 1px;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 32px;
+  transform: translate(-50%, -50%);
 }
 .splitter.horizontal::after {
-  left: 0;
-  right: 0;
-  top: 2px;
-  height: 1px;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 3px;
+  transform: translate(-50%, -50%);
 }
 .splitter:hover::after,
 .splitter.active::after {
-  background: var(--ink);
+  background: var(--ink-tertiary);
 }
 
-/* ── 药丸控件 ── */
+/* ── 药丸控件：默认无边框浅底，主操作墨底 ── */
 .pill {
   height: var(--h-pill);
   padding: 0 var(--sp-3);
+  border: 0;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--bg-subtle);
   color: var(--ink);
   cursor: pointer;
   display: inline-flex;
@@ -302,7 +357,7 @@ textarea:focus-visible {
   font-size: 13px;
 }
 .pill:hover {
-  background: var(--bg-hover);
+  background: var(--bg-active);
 }
 .pill:disabled {
   opacity: 0.4;
@@ -312,14 +367,12 @@ textarea:focus-visible {
   height: var(--h-pill-lg);
   background: var(--ink);
   color: var(--bg);
-  border-color: var(--ink);
   padding: 0 18px;
 }
 .pill.primary:hover {
-  background: #333333;
+  background: #333336;
 }
 .pill.ghost {
-  border-color: transparent;
   background: transparent;
 }
 .pill.ghost:hover {
@@ -327,10 +380,10 @@ textarea:focus-visible {
 }
 .pill.danger {
   color: var(--err);
-  border-color: var(--err);
+  background: var(--err-soft);
 }
 .pill.danger:hover {
-  background: var(--bg-hover);
+  background: #f7dede;
 }
 
 /* ── 标题行 + URL 大胶囊（06 号文档 §3.3）── */
@@ -338,18 +391,20 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-3) 0;
+  padding: 18px 16px 0;
 }
 .name-input {
   flex: 1;
   min-width: 0;
-  height: 30px;
+  height: 34px;
+  margin-left: -8px;
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
-  padding: 0 var(--sp-3);
-  font-size: 14px;
+  padding: 0 8px;
+  font-size: 20px;
   font-weight: 600;
+  letter-spacing: -0.015em;
   outline: none;
 }
 .name-input:hover {
@@ -357,46 +412,73 @@ textarea:focus-visible {
 }
 .name-input:focus {
   border-color: var(--ink);
-  background: var(--bg);
+  background: var(--bg-subtle);
 }
 .url-bar {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  padding: 10px 16px 14px;
 }
 
-/* 1024 最小窗口下仍保证 URL 输入 ≥200px（06 号文档 §3.3） */
-@media (max-width: 1180px) {
-  .url-bar {
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
-  }
-}
+/* 窄面板适配见文末容器查询（1024 下 URL 仍 ≥200px，06 号文档 §3.3） */
 .url-capsule {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: 6px;
   flex: 1;
   min-width: 0;
-  height: 40px;
-  padding: 0 var(--sp-1) 0 var(--sp-1);
-  border: 1px solid var(--line);
+  height: 44px;
+  padding: var(--sp-1);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  background: var(--bg);
-  transition: border-color 120ms ease;
+  background: var(--bg-subtle);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 .url-capsule:focus-within {
   border-color: var(--ink);
+  background: var(--bg);
 }
 .method-select {
-  height: 30px;
+  height: 34px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--bg-subtle);
   padding: 0 var(--sp-3);
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+.url-input {
+  flex: 1;
+  min-width: 120px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.send-pill {
+  flex: none;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.send-pill:hover {
+  background: #333336;
+}
+.send-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── 下拉列表（06 号文档 §3.3 / §3.4）：Chromium 可定制 select，容器 10px，选项药丸 ── */
@@ -443,35 +525,6 @@ select option:checked {
 select option::checkmark {
   content: none;
 }
-.url-input {
-  flex: 1;
-  min-width: 120px;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font-family: var(--font-mono);
-}
-.send-pill {
-  flex: none;
-  height: 30px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--ink);
-  color: var(--bg);
-  padding: 0 var(--sp-4);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  cursor: pointer;
-  font-size: 13px;
-}
-.send-pill:hover {
-  background: #333333;
-}
-.send-pill:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 /* ── JSON 高亮：key 黑 / string 蓝 / number·bool 橙（06 号文档 §3.6）── */
 .json-key {
@@ -484,50 +537,59 @@ select option::checkmark {
   color: var(--warn);
 }
 
-/* ── 方法徽章（06 号文档 §3.2）── */
+/* ── 方法徽章（06 号文档 §3.2）：6px 色块，无描边 ── */
 .badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   height: 20px;
-  padding: 0 var(--sp-2);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  background: var(--bg);
+  flex: none;
 }
 .badge.GET {
   color: var(--ok);
+  background: var(--ok-soft);
 }
 .badge.POST {
   color: var(--info);
+  background: var(--info-soft);
 }
 .badge.PUT {
   color: var(--warn);
+  background: var(--warn-soft);
 }
 .badge.DELETE {
   color: var(--err);
+  background: var(--err-soft);
 }
 .badge.PATCH {
-  color: #7c3aed;
+  color: var(--violet);
+  background: var(--violet-soft);
 }
 .badge.OTHER,
 .badge.HEAD,
 .badge.OPTIONS {
   color: var(--ink-secondary);
+  background: var(--bg-subtle);
 }
 
-/* ── 分段控件 / Tab ── */
+/* ── 分段控件（药丸轨道）/ 文本 Tab（下划线）── */
 .segmented {
   display: inline-flex;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   background: var(--bg-subtle);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--line);
+  border: 0;
   overflow: hidden;
 }
 .segmented button {
@@ -545,8 +607,50 @@ select option::checkmark {
   color: var(--ink);
 }
 .segmented button[aria-selected='true'] {
-  background: var(--bg);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.text-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+.text-tabs button {
+  position: relative;
+  height: 100%;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.text-tabs button:hover {
   color: var(--ink);
+}
+.text-tabs button[aria-selected='true'] {
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+}
+.text-tabs button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
 }
 
 /* ── 树 ── */
@@ -555,10 +659,11 @@ select option::checkmark {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  height: var(--h-pill);
-  padding: 0 var(--sp-3);
+  height: 32px;
+  margin: 1px 6px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  border-left: 2px solid transparent;
   font-size: 13px;
 }
 .tree-row:hover {
@@ -566,7 +671,7 @@ select option::checkmark {
 }
 .tree-row.selected {
   background: var(--bg-active);
-  border-left-color: var(--ink);
+  font-weight: 500;
 }
 .tree-row .label {
   flex: 1;
@@ -582,20 +687,24 @@ select option::checkmark {
   left: 8px;
   right: 8px;
   height: 2px;
+  border-radius: 2px;
   background: var(--ink);
 }
 .tree-row.drop-before::after {
-  top: -1px;
+  top: -2px;
 }
 .tree-row.drop-after::after {
-  bottom: -1px;
+  bottom: -2px;
 }
 .tree-row.drop-into {
   background: var(--bg-active);
+  outline: 1px dashed var(--ink-tertiary);
+  outline-offset: -2px;
 }
 .tree-group {
-  padding: var(--sp-2) var(--sp-3) var(--sp-1);
+  padding: 12px 14px 4px;
   font-size: 12px;
+  font-weight: 500;
   color: var(--ink-tertiary);
 }
 .tree-actions {
@@ -606,54 +715,68 @@ select option::checkmark {
   font-size: 12px;
 }
 .tree-editor {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  gap: var(--sp-1);
-  padding: var(--sp-2);
+  gap: 6px;
+  padding: 10px;
   border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
 }
 .tree-editor input {
   flex: 1;
   min-width: 0;
-  height: var(--h-pill);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
   padding: 0 var(--sp-3);
   outline: none;
-  background: var(--bg);
+  background: var(--bg-subtle);
+}
+.tree-editor input::placeholder {
+  color: var(--ink-tertiary);
 }
 .tree-editor input:focus {
   border-color: var(--ink);
+  background: var(--bg);
 }
 
 /* ── 编辑区 ── */
 .tab-row {
-  padding: 0 var(--sp-3) var(--sp-2);
+  margin-top: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
   overflow: hidden;
+}
+.tab-row .text-tabs button {
+  height: 40px;
 }
 .editor-scroll {
   flex: 1;
   overflow: auto;
-  padding: 0 var(--sp-3) var(--sp-3);
+  padding: 12px 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: 10px;
 }
 .kv-table {
   width: 100%;
   border-collapse: collapse;
 }
 .kv-table td {
-  padding: var(--sp-1);
+  padding: 2px 4px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
   font-size: 12px;
 }
 .kv-table input[type='text'] {
   width: 100%;
-  height: 28px;
+  height: 30px;
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  padding: 0 var(--sp-3);
+  border-radius: var(--radius-control);
+  padding: 0 10px;
   background: transparent;
   outline: none;
 }
@@ -662,14 +785,14 @@ select option::checkmark {
 }
 .kv-table input[type='text']:focus {
   border-color: var(--ink);
-  background: var(--bg);
+  background: var(--bg-subtle);
 }
 .kv-table textarea {
   width: 100%;
   min-height: 28px;
   border: 1px solid transparent;
-  border-radius: var(--radius-panel);
-  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-control);
+  padding: var(--sp-1) 10px;
   resize: vertical;
   background: transparent;
   font-family: var(--font-mono);
@@ -680,6 +803,23 @@ select option::checkmark {
   height: 16px;
   accent-color: var(--ink);
   cursor: pointer;
+}
+.kv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+  padding: 22px 16px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--ink-tertiary);
+  font-size: 12px;
+}
+.kv-table tr:has(.kv-empty) td {
+  border-bottom: 0;
+  padding: 0;
 }
 .field {
   display: flex;
@@ -697,57 +837,68 @@ select option::checkmark {
 .field textarea {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  height: var(--h-pill);
-  padding: 0 var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  height: 32px;
+  padding: 0 10px;
   outline: none;
-  background: var(--bg);
+  background: var(--bg-subtle);
 }
 .field input[type='checkbox'] {
   flex: none;
   height: auto;
   border: 0;
   padding: 0;
+  background: transparent;
 }
 .field input[type='number'] {
   max-width: 140px;
 }
 .field textarea {
   height: auto;
-  min-height: 64px;
-  border-radius: var(--radius-panel);
+  min-height: 72px;
+  border-radius: 10px;
   font-family: var(--font-mono);
-  padding: var(--sp-2);
+  padding: var(--sp-2) 10px;
 }
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   border-color: var(--ink);
+  background: var(--bg);
 }
 .body-area {
   width: 100%;
   min-height: 140px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
   font-family: var(--font-mono);
   resize: vertical;
   outline: none;
-  background: var(--bg);
+  background: var(--bg-subtle);
 }
 .body-area:focus {
   border-color: var(--ink);
+  background: var(--bg);
 }
 
 /* ── 响应面板（06 号文档 §3.6）── */
 .response-head {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-3);
+  height: 48px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--line);
-  min-height: 54px;
+}
+.response-head .text-tabs {
+  height: 100%;
+}
+.response-head .status-line,
+.response-pending {
+  margin-left: auto;
 }
 .meta {
   font-variant-numeric: tabular-nums;
@@ -758,27 +909,39 @@ select option::checkmark {
   font-family: var(--font-mono);
   white-space: nowrap;
 }
-.meta .status.s2,
-.history-row .status.s2 {
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-chip);
+  background: var(--bg-subtle);
+  color: var(--ink-secondary);
+  font-weight: 600;
+  font-size: 12px;
+}
+.status.s2 {
   color: var(--ok);
-  font-weight: 700;
+  background: var(--ok-soft);
 }
-.meta .status.s4,
-.history-row .status.s4 {
+.status.s4 {
   color: var(--warn);
-  font-weight: 700;
+  background: var(--warn-soft);
 }
-.meta .status.s5,
-.history-row .status.s5 {
+.status.s5 {
   color: var(--err);
-  font-weight: 700;
+  background: var(--err-soft);
 }
 .response-body {
   flex: 1;
   overflow: auto;
   margin: 0;
-  padding: var(--sp-3);
+  padding: 16px;
   font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--bg);
@@ -786,7 +949,7 @@ select option::checkmark {
 .assertions {
   list-style: none;
   margin: 0;
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) 14px;
   border-bottom: 1px solid var(--line);
 }
 .assertions li {
@@ -794,6 +957,7 @@ select option::checkmark {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  line-height: 1.8;
 }
 .assertion-error {
   color: var(--err);
@@ -802,7 +966,8 @@ select option::checkmark {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) 14px;
+  border-bottom: 1px solid var(--line);
 }
 .muted {
   color: var(--ink-secondary);
@@ -811,6 +976,11 @@ select option::checkmark {
   font-family: var(--font-mono);
 }
 .empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: var(--sp-6);
   color: var(--ink-tertiary);
   text-align: center;
@@ -829,10 +999,11 @@ select option::checkmark {
   min-height: 0;
 }
 .history-toolbar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) 10px;
   border-bottom: 1px solid var(--line);
 }
 .history-search-wrap {
@@ -842,13 +1013,14 @@ select option::checkmark {
   gap: 6px;
   height: var(--h-pill);
   padding: 0 var(--sp-3);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
   color: var(--ink-tertiary);
-  background: var(--bg);
+  background: var(--bg-subtle);
 }
 .history-search-wrap:focus-within {
-  border-color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--bg);
 }
 .history-search {
   flex: 1;
@@ -866,8 +1038,7 @@ select option::checkmark {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: 0 var(--sp-3);
-  border-bottom: 1px solid var(--line);
+  padding: 0 14px;
   cursor: pointer;
 }
 .history-row:hover {
@@ -888,11 +1059,10 @@ select option::checkmark {
 .history-group {
   display: flex;
   align-items: center;
-  padding: 0 var(--sp-3);
+  padding: 0 14px;
   font-size: 12px;
   color: var(--ink-tertiary);
   background: var(--bg-subtle);
-  border-bottom: 1px solid var(--line);
 }
 .history-foot {
   flex: none;
@@ -900,7 +1070,7 @@ select option::checkmark {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: var(--sp-1) var(--sp-3);
+  padding: var(--sp-1) 14px;
   border-top: 1px solid var(--line);
 }
 .history-foot .pill {
@@ -915,7 +1085,7 @@ select option::checkmark {
 }
 .skeleton-row {
   height: 22px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   background: var(--bg-subtle);
   animation: pulse 1.2s ease-in-out infinite;
 }
@@ -959,10 +1129,10 @@ select option::checkmark {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 28px;
+  height: 30px;
   padding: 0 10px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   background: transparent;
   cursor: pointer;
   font-size: 13px;
@@ -983,7 +1153,7 @@ select option::checkmark {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(17, 17, 17, 0.16);
+  background: rgba(22, 22, 24, 0.28);
 }
 .dialog {
   width: 420px;
@@ -1027,7 +1197,7 @@ select option::checkmark {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  height: 46px;
+  height: 50px;
   padding: 0 var(--sp-4);
   border-bottom: 1px solid var(--line);
   color: var(--ink-tertiary);
@@ -1053,7 +1223,7 @@ select option::checkmark {
   height: 34px;
   padding: 0 10px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-control);
   background: transparent;
   cursor: pointer;
   font-size: 13px;
@@ -1106,10 +1276,10 @@ kbd {
   white-space: nowrap;
 }
 
-/* ── 反馈（06 号文档 §3.9）── */
+/* ── 反馈（06 号文档 §3.9）：底部居中，避开标题栏与编辑区 ── */
 .toast {
   position: fixed;
-  top: var(--sp-4);
+  bottom: 44px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--ink);
@@ -1126,14 +1296,10 @@ kbd {
 .toast.error {
   background: var(--ink);
 }
-/* 无边框标题栏下 Toast 让开拖拽区，距标题栏下沿仍是 16px */
-.titlebar ~ .toast {
-  top: calc(40px + var(--sp-4));
-}
 .cancel-float {
   position: fixed;
   right: var(--sp-4);
-  bottom: 34px;
+  bottom: 44px;
   z-index: 20;
 }
 .spinner {
@@ -1164,7 +1330,52 @@ kbd {
 }
 .row-actions .pill {
   height: 22px;
-  padding: 0 6px;
+  padding: 0 7px;
+}
+
+/* 窄面板适配：由面板容器宽度决定密度，而非窗口宽度（06 号文档 §3.3 / §4） */
+@container (max-width: 480px) {
+  .url-bar {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .url-capsule .method-select {
+    padding: 0 10px;
+  }
+  .send-pill {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    font-size: 0;
+  }
+  .tab-row .text-tabs button {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}
+
+@container (max-width: 430px) {
+  .response-head {
+    flex-wrap: wrap;
+    align-content: center;
+    height: auto;
+    min-height: 48px;
+    padding: 4px 12px 6px;
+    row-gap: 2px;
+  }
+  .response-head .text-tabs {
+    height: 38px;
+  }
+  .response-head .text-tabs button {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .response-head .status-line {
+    width: 100%;
+    margin-left: 0;
+    padding-bottom: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

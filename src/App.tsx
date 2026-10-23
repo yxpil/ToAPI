@@ -19,6 +19,9 @@ import { CommandPalette } from './components/CommandPalette'
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max))
 
+/** 画布左右留白，拖拽坐标需换算成面板宽度 */
+const SHELL_PAD = 10
+
 const locateApi = (
   tree: ProjectNode[],
   apiId: string,
@@ -37,9 +40,11 @@ const locateApi = (
   return null
 }
 
-/** 无边框窗口自绘标题栏（06 号文档 §4）：整条可拖拽，右侧窗口控制药丸 */
+/** 无边框窗口自绘标题栏（06 号文档 §4）：整条可拖拽，右侧窗口控制 */
 function TitleBar() {
   const { maximized, init, setMaximized, minimize, toggleMaximize, close } = useWindow()
+  const { tree, activeProjectId, api } = useApp()
+  const projectName = tree.find((node) => node.project.id === activeProjectId)?.project.name
 
   useEffect(() => {
     void init()
@@ -53,7 +58,15 @@ function TitleBar() {
           <Icon name="send" size={14} />
         </span>
         <span className="brand-name">ToAPI</span>
-        <span className="brand-tag">本地 API 工作台</span>
+      </div>
+      <div className="titlebar-crumbs" aria-hidden="true">
+        {projectName && (
+          <>
+            <span className="crumb">{projectName}</span>
+            <span className="crumb-sep">/</span>
+          </>
+        )}
+        <span className="crumb current">{api?.name || '本地 API 工作台'}</span>
       </div>
       <nav className="titlebar-controls" aria-label="窗口控制">
         <button className="win-btn" title="最小化" aria-label="最小化窗口" onClick={minimize}>
@@ -242,26 +255,22 @@ export default function App() {
   }
 
   const moveResponse = (pos: number): void => {
-    const shell = shellRef.current?.getBoundingClientRect()
-    if (!shell) return
+    const main = shellRef.current?.querySelector('.main-col')?.getBoundingClientRect()
+    if (!main) return
     if (orientation === 'right') {
-      const mainWidth = Math.max(1, shell.width - treeWidthRef.current - 5)
-      updateRightRatio(clamp((shell.right - pos) / mainWidth, 320 / mainWidth, 0.65))
+      updateRightRatio(clamp((main.right - pos) / main.width, 320 / main.width, 0.65))
     } else {
-      updateBottomRatio(clamp((shell.bottom - pos) / shell.height, 180 / shell.height, 0.7))
+      updateBottomRatio(clamp((main.bottom - pos) / main.height, 180 / main.height, 0.7))
     }
   }
 
   const nudgeResponse = (delta: number): void => {
-    const shell = shellRef.current?.getBoundingClientRect()
-    if (!shell) return
+    const main = shellRef.current?.querySelector('.main-col')?.getBoundingClientRect()
+    if (!main) return
     if (orientation === 'right') {
-      const mainWidth = Math.max(1, shell.width - treeWidthRef.current - 5)
-      updateRightRatio(clamp(rightRatioRef.current + delta / mainWidth, 320 / mainWidth, 0.65))
+      updateRightRatio(clamp(rightRatioRef.current + delta / main.width, 320 / main.width, 0.65))
     } else {
-      updateBottomRatio(
-        clamp(bottomRatioRef.current + delta / shell.height, 180 / shell.height, 0.7),
-      )
+      updateBottomRatio(clamp(bottomRatioRef.current + delta / main.height, 180 / main.height, 0.7))
     }
   }
 
@@ -290,7 +299,7 @@ export default function App() {
           orientation="vertical"
           label="调整项目树宽度"
           testId="splitter-tree"
-          onDrag={(x) => updateTreeWidth(clamp(x, 180, maxTreeWidth()))}
+          onDrag={(x) => updateTreeWidth(clamp(x - SHELL_PAD, 180, maxTreeWidth()))}
           onNudge={(d) => updateTreeWidth(clamp(treeWidthRef.current + d, 180, maxTreeWidth()))}
           onEnd={() => savePref('treeWidth', treeWidthRef.current)}
         />

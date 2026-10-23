@@ -121,6 +121,18 @@ const report = {
       buttons: bar.querySelectorAll('.win-btn').length
     }
   })()`),
+  panels: await js(`(() => {
+    const radius = (sel) => {
+      const el = document.querySelector(sel)
+      return el ? getComputedStyle(el).borderRadius : null
+    }
+    return {
+      canvas: getComputedStyle(document.body).backgroundColor,
+      tree: radius('.tree'),
+      editor: radius('.workspace'),
+      response: radius('.response-col')
+    }
+  })()`),
   svgIcons: await js(`document.querySelectorAll('svg.icon').length`),
   emojiInDom: await js(
     `(document.body.innerText.match(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/gu) || []).length`,
@@ -136,7 +148,11 @@ const ok =
   report.rootChildren > 0 &&
   report.pageErrors.length === 0 &&
   report.emojiInDom === 0 &&
-  report.titlebar?.height === 40 &&
+  report.panels?.canvas === 'rgb(242, 242, 244)' &&
+  report.panels?.tree === '14px' &&
+  report.panels?.editor === '14px' &&
+  report.panels?.response === '14px' &&
+  report.titlebar?.height === 46 &&
   report.titlebar?.buttons === 3
 console.log(JSON.stringify({ ...report, verdict: ok ? 'PASS' : 'FAIL' }, null, 2))
 

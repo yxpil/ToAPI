@@ -172,9 +172,15 @@ try {
     const t = document.querySelector('.toast')
     const r = t.getBoundingClientRect()
     const cs = getComputedStyle(t)
-    return { top: Math.round(r.top), radius: cs.borderRadius, bg: cs.backgroundColor }
+    return {
+      bottom: Math.round(window.innerHeight - r.bottom),
+      radius: cs.borderRadius,
+      bg: cs.backgroundColor
+    }
   })()`)
-  if (report.toast.top > 120) throw new Error(`Toast 未在顶部居中：top=${report.toast.top}px`)
+  if (report.toast.bottom < 30 || report.toast.bottom > 80) {
+    throw new Error(`Toast 未在底部居中：bottom=${report.toast.bottom}px`)
+  }
   if (report.toast.radius !== '999px') throw new Error(`Toast 非药丸：${report.toast.radius}`)
 
   await app.js(`window.__h.click('发送 (Ctrl+Enter)')`)
@@ -230,6 +236,57 @@ try {
       throw new Error(`字号越档（${key}）：${size}，仅允许 12/13/14/20`)
     }
   }
+  // ── 06 号文档 §4：画布 + 浮层面板 + 下划线 Tab ──
+  report.layout = await app.js(`(() => {
+    const panel = (sel) => {
+      const cs = getComputedStyle(document.querySelector(sel))
+      return { radius: cs.borderRadius, bg: cs.backgroundColor, border: cs.borderTopWidth }
+    }
+    const shell = getComputedStyle(document.querySelector('.shell'))
+    const tab = document.querySelector('.tab-row .text-tabs button[aria-selected="true"]')
+    const tabCs = tab ? getComputedStyle(tab) : null
+    const ind = tab ? getComputedStyle(tab, '::after') : null
+    return {
+      canvas: getComputedStyle(document.body).backgroundColor,
+      gap: shell.gap,
+      padLeft: shell.paddingLeft,
+      tree: panel('.tree'),
+      editor: panel('.workspace'),
+      response: panel('.response-col'),
+      tab: tab
+        ? {
+            bg: tabCs.backgroundColor,
+            radius: tabCs.borderRadius,
+            indicator: ind.height,
+            indicatorColor: ind.backgroundColor
+          }
+        : null
+    }
+  })()`)
+  if (report.layout.canvas !== 'rgb(242, 242, 244)') {
+    throw new Error(`画布底色不符：${report.layout.canvas}`)
+  }
+  if (report.layout.gap !== '10px' || report.layout.padLeft !== '10px') {
+    throw new Error(`面板间距不符：${JSON.stringify(report.layout)}`)
+  }
+  for (const [name, panel] of Object.entries({
+    tree: report.layout.tree,
+    editor: report.layout.editor,
+    response: report.layout.response,
+  })) {
+    if (panel.radius !== '14px' || panel.bg !== 'rgb(255, 255, 255)' || panel.border !== '1px') {
+      throw new Error(`浮层面板规格不符（${name}）：${JSON.stringify(panel)}`)
+    }
+  }
+  if (
+    !report.layout.tab ||
+    report.layout.tab.bg !== 'rgba(0, 0, 0, 0)' ||
+    report.layout.tab.radius !== '0px' ||
+    report.layout.tab.indicator !== '2px' ||
+    report.layout.tab.indicatorColor !== 'rgb(22, 22, 24)'
+  ) {
+    throw new Error(`下划线 Tab 规格不符：${JSON.stringify(report.layout.tab)}`)
+  }
   report.focusRing = await app.js(`(() => {
     const b = document.querySelector('[data-testid="save"]')
     b.focus({ focusVisible: true })
@@ -262,11 +319,20 @@ try {
   if (report.forbiddenStyles.gradients > 0 || report.forbiddenStyles.shadows > 0) {
     throw new Error(`出现禁用样式：${JSON.stringify(report.forbiddenStyles)}`)
   }
-  report.badButtonRadius = await app.js(`[...document.querySelectorAll('button')]
-    .filter((b) => b.offsetParent !== null && getComputedStyle(b).borderRadius !== '999px')
-    .map((b) => b.innerText.trim() || b.getAttribute('aria-label'))`)
+  report.badButtonRadius = await app.js(`(() => {
+    const expected = (b) => {
+      if (b.closest('.win-btn')) return '8px'
+      if (b.closest('.text-tabs')) return '0px'
+      if (b.closest('.menu-item')) return '6px'
+      if (b.closest('.palette-item')) return '8px'
+      return '999px'
+    }
+    return [...document.querySelectorAll('button')]
+      .filter((b) => b.offsetParent !== null && getComputedStyle(b).borderRadius !== expected(b))
+      .map((b) => (b.innerText.trim() || b.getAttribute('aria-label')) + '=' + getComputedStyle(b).borderRadius)
+  })()`)
   if (report.badButtonRadius.length > 0) {
-    throw new Error(`交互控件非药丸：${report.badButtonRadius.join(', ')}`)
+    throw new Error(`交互控件圆角不符：${report.badButtonRadius.join(', ')}`)
   }
   report.buttonsWithoutTitle = await app.js(`[...document.querySelectorAll('button')]
     .filter((b) => b.offsetParent !== null && !b.getAttribute('title'))
@@ -477,8 +543,8 @@ try {
     const s = document.querySelector('[data-testid="splitter-tree"]')
     const r = s.getBoundingClientRect()
     s.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 2, clientY: r.top + 40, pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1 }))
-    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 300, clientY: r.top + 40, pointerId: 1, pointerType: 'mouse', buttons: 1 }))
-    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 300, clientY: r.top + 40, pointerId: 1, pointerType: 'mouse' }))
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 310, clientY: r.top + 40, pointerId: 1, pointerType: 'mouse', buttons: 1 }))
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 310, clientY: r.top + 40, pointerId: 1, pointerType: 'mouse' }))
     return true
   })()`)
   await wait(300)
@@ -500,8 +566,8 @@ try {
     const s = document.querySelector('[data-testid="splitter-tree"]')
     const r = s.getBoundingClientRect()
     s.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 2, clientY: r.top + 40, pointerId: 2, pointerType: 'mouse', button: 0, buttons: 1 }))
-    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 240, clientY: r.top + 40, pointerId: 2, pointerType: 'mouse', buttons: 1 }))
-    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 240, clientY: r.top + 40, pointerId: 2, pointerType: 'mouse' }))
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 250, clientY: r.top + 40, pointerId: 2, pointerType: 'mouse', buttons: 1 }))
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 250, clientY: r.top + 40, pointerId: 2, pointerType: 'mouse' }))
     return true
   })()`)
   await wait(200)
@@ -552,7 +618,7 @@ try {
     }
   })()`)
   if (
-    report.palette.radius !== '12px' ||
+    report.palette.radius !== '14px' ||
     report.palette.shadow !== 'none' ||
     report.palette.count < 1
   ) {
@@ -679,19 +745,24 @@ try {
       buttons: [...controls.querySelectorAll('button')].map((b) => ({
         title: b.title,
         radius: getComputedStyle(b).borderRadius,
-        size: Math.round(b.getBoundingClientRect().width)
+        width: Math.round(b.getBoundingClientRect().width),
+        height: Math.round(b.getBoundingClientRect().height)
       }))
     }
   })()`)
   if (!report.titlebar) throw new Error('Windows 下未渲染自绘标题栏')
-  if (report.titlebar.height !== 40) throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
+  if (report.titlebar.height !== 46) throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
   if (report.titlebar.drag !== 'drag' || report.titlebar.controlsDrag !== 'no-drag') {
     throw new Error(`标题栏拖拽区不符：${JSON.stringify(report.titlebar)}`)
   }
   if (report.titlebar.buttons.length !== 3) {
     throw new Error(`窗口控件数量不符：${report.titlebar.buttons.length}`)
   }
-  if (report.titlebar.buttons.some((b) => b.radius !== '999px' || b.size !== 30 || !b.title)) {
+  if (
+    report.titlebar.buttons.some(
+      (b) => b.radius !== '8px' || b.width !== 32 || b.height !== 28 || !b.title,
+    )
+  ) {
     throw new Error(`窗口控件规格不符：${JSON.stringify(report.titlebar.buttons)}`)
   }
 

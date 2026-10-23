@@ -78,7 +78,7 @@ export function ResponsePane() {
   return (
     <section className="response" data-testid="response">
       <div className="response-head">
-        <div className="segmented" role="tablist" aria-label="响应视图">
+        <div className="segmented text-tabs" role="tablist" aria-label="响应视图">
           {VIEWS.map((v) => (
             <button
               key={v.id}
@@ -92,14 +92,14 @@ export function ResponsePane() {
           ))}
         </div>
         {response && view !== 'history' && (
-          <div className="meta status-line" style={{ marginLeft: 'auto' }}>
+          <div className="meta status-line">
             <span className={`status ${statusClass(status)}`}>{status}</span>{' '}
             {response.response.statusText} · {response.response.timeMs.toFixed(0)}ms ·{' '}
             {formatBytes(response.response.bodySizeBytes)}
           </div>
         )}
         {sendPending && (
-          <span style={{ marginLeft: 'auto' }}>
+          <span className="response-pending">
             <Spinner label="发送中" />
           </span>
         )}

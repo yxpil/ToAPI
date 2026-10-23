@@ -122,7 +122,7 @@ export function EditorPane() {
       </div>
 
       <div className="tab-row">
-        <div className="segmented" role="tablist" aria-label="请求编辑分区">
+        <div className="segmented text-tabs" role="tablist" aria-label="请求编辑分区">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -144,6 +144,7 @@ export function EditorPane() {
             rows={api.params}
             onChange={(rows) => patchApi({ params: rows })}
             keyPlaceholder="query 名"
+            emptyText="暂无查询参数"
           />
         )}
 
@@ -152,6 +153,7 @@ export function EditorPane() {
             rows={api.headers}
             onChange={(rows) => patchApi({ headers: rows })}
             keyPlaceholder="Header 名"
+            emptyText="暂无自定义 Header"
           />
         )}
 
@@ -327,6 +329,7 @@ export function EditorPane() {
                 rows={api.fake.headers ?? []}
                 onChange={(rows) => patchFake({ headers: rows })}
                 keyPlaceholder="Header 名"
+                emptyText="暂无伪装 Header"
               />
             </div>
           </>

@@ -6,6 +6,7 @@ interface Props {
   onChange: (rows: KvRow[]) => void
   keyPlaceholder?: string
   valuePlaceholder?: string
+  emptyText?: string
 }
 
 const blank = (): KvRow => ({ key: '', value: '', enabled: true, desc: '' })
@@ -15,6 +16,7 @@ export function KvTable({
   onChange,
   keyPlaceholder = 'Key',
   valuePlaceholder = 'Value',
+  emptyText = '暂无内容',
 }: Props) {
   const patch = (index: number, next: Partial<KvRow>): void => {
     const copy = rows.map((r, i) => (i === index ? { ...r, ...next } : r))
@@ -77,9 +79,12 @@ export function KvTable({
         {rows.length === 0 && (
           <tr>
             <td colSpan={5}>
-              <button className="pill ghost" title="添加一行" onClick={() => onChange([blank()])}>
-                <Icon name="plus" size={14} /> 添加
-              </button>
+              <div className="kv-empty">
+                <span>{emptyText}</span>
+                <button className="pill" title="添加一行" onClick={() => onChange([blank()])}>
+                  <Icon name="plus" size={14} /> 添加一行
+                </button>
+              </div>
             </td>
           </tr>
         )}
