@@ -275,6 +275,69 @@ try {
     throw new Error(`按钮缺少快捷键提示：${report.buttonsWithoutTitle.join(', ')}`)
   }
 
+  // ── 下拉列表圆角（06 号文档 §3.3）：弹出层 10px、选项药丸、无阴影 ──
+  const methodRect = await app.js(`(() => {
+    const r = document.querySelector('[data-testid="method"]').getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  })()`)
+  await app.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: methodRect.x,
+    y: methodRect.y,
+    button: 'left',
+    clickCount: 1,
+  })
+  await app.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: methodRect.x,
+    y: methodRect.y,
+    button: 'left',
+    clickCount: 1,
+  })
+  await app.waitFor(
+    `document.querySelector('[data-testid="method"]').matches(':open')`,
+    '下拉列表展开',
+  )
+  report.selectPicker = await app.js(`(() => {
+    const sel = document.querySelector('[data-testid="method"]')
+    const picker = getComputedStyle(sel, '::picker(select)')
+    const option = getComputedStyle(document.querySelector('select option'))
+    return {
+      radius: picker.borderRadius,
+      shadow: picker.boxShadow,
+      background: picker.backgroundColor,
+      optionRadius: option.borderRadius,
+      optionHeight: option.minHeight
+    }
+  })()`)
+  if (
+    report.selectPicker.radius !== '10px' ||
+    report.selectPicker.shadow !== 'none' ||
+    report.selectPicker.optionRadius !== '999px'
+  ) {
+    throw new Error(`下拉列表规格不符：${JSON.stringify(report.selectPicker)}`)
+  }
+  const selectShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(resolve(root, '.tmp/toapi-select.png'), Buffer.from(selectShot.data, 'base64'))
+  await app.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Escape',
+    code: 'Escape',
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  })
+  await app.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Escape',
+    code: 'Escape',
+    windowsVirtualKeyCode: 27,
+    nativeVirtualKeyCode: 27,
+  })
+  await app.waitFor(
+    `!document.querySelector('[data-testid="method"]').matches(':open')`,
+    '下拉列表关闭',
+  )
+
   // ── 脚本断言：在「脚本」Tab 写后置断言并保存重发 ──
   await app.js(`window.__h.click('脚本')`)
   await app.waitFor(`!!document.querySelector('[aria-label="后置脚本"]')`, '脚本编辑区出现')
@@ -625,5 +688,5 @@ try {
   echo.close()
 }
 
-report.screenshots = ['.tmp/toapi-flow-1.png', '.tmp/toapi-flow-2.png']
+report.screenshots = ['.tmp/toapi-flow-1.png', '.tmp/toapi-flow-2.png', '.tmp/toapi-select.png']
 console.log(JSON.stringify(report, null, 2))

@@ -325,6 +325,51 @@ textarea:focus-visible {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* ── 下拉列表（06 号文档 §3.3 / §3.4）：Chromium 可定制 select，容器 10px，选项药丸 ── */
+select {
+  appearance: base-select;
+}
+select::picker(select) {
+  appearance: base-select;
+  margin-top: 6px;
+  padding: var(--sp-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+select::picker-icon {
+  color: var(--ink-secondary);
+  margin-left: var(--sp-1);
+  transition: transform 120ms ease;
+}
+select:open::picker-icon {
+  transform: rotate(180deg);
+}
+select option {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+}
+select option:hover,
+select option:focus-visible {
+  background: var(--bg-hover);
+}
+select option:checked {
+  background: var(--ink);
+  color: var(--bg);
+}
+select option::checkmark {
+  content: none;
+}
 .url-input {
   flex: 1;
   min-width: 120px;
