@@ -3,6 +3,8 @@ dist/
 dist-electron/
 out/
 coverage/
+release/
+artifacts/
 *.log
 .DS_Store
 .vscode/

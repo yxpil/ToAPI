@@ -51,23 +51,24 @@ AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失
 
 | 里程碑 | 状态 | 说明 |
 |---|---|---|
-| M1 骨架 | **已完成并验证** | Electron 45 + React 19 + Vite 8 + `node:sqlite`；24 个 IPC 通道；项目/集合/接口三级树、请求编辑器（Params/Headers/Auth/伪装/Body/提取器）、响应面板（Pretty 高亮/Raw/Headers/历史）、环境与变量、UA 预设、CookieJar、大响应体落盘、游标分页历史 |
-| M2 变量与环境 | 大部分随 M1 完成 | `{{var}}` 全链路插值、runtime/环境/全局三级优先、循环引用检测、链式提取器传递已实现并通过集成测试 |
-| M3 脚本引擎 | 未开始 | 需 `isolated-vm`（原生模块，按 14 号文档准备 prebuild 矩阵） |
-| M4–M8 | 未开始 | Runner、TAPI、MD、开放调用、定时/压测、国际化与多平台 |
+| M1 骨架 | **已完成并验证** | Electron 45 + React 19 + Vite 8 + `node:sqlite`；项目/集合/接口三级树、请求编辑器、响应面板、环境与变量、UA 预设、CookieJar、大响应体落盘、游标分页历史 |
+| M2 变量与环境 | **已完成并验证** | `{{var}}` 全链路插值、runtime/环境/全局三级优先、循环引用检测、环境切换与状态栏变量编辑 |
+| M3 脚本引擎 | **已完成并验证** | worker + vm 双层隔离沙箱；`toapi.request`(含 setHeader/setBody/skip/send 子请求)、`vars/env/globals`、`fake.*`、`test/expect`、`log`、md5/sha256/hmac/base64/uuid/timestamp/sleep；5s 熔断（同步 vm timeout + 异步 terminate）、子请求深度 8 / 总数 50 |
+| M4 联合请求 | **已完成并验证** | 声明式提取器 + 脚本式链式；集合 Runner（顺序执行、运行时变量跨接口传递、stopOnFail、逐项断言、进度事件、运行记录持久化）+ Runner 面板 |
+| M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；批量报告导出待做 |
+| M5.5–M8 | 未开始 | TAPI、MD 文档、开放调用/MCP、定时与压测、国际化与多平台 |
+
+**已发布 v0.1.0**：`release/ToAPI-Setup-0.1.0-win-x64.exe`（NSIS 安装器）与 `release/ToAPI-0.1.0-win-x64.zip`（便携版），附 `sha256sums.txt`。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
 
 ### 已跑过的验证（不是声明，是实测）
 
 ```bash
-npm run typecheck   # tsconfig.json + tsconfig.electron.json 双侧零错误
-npm run lint        # ESLint 零错误
-npm run format:check
-npm run check:channels   # 24 invoke + 1 event 通道：schema/handler/文档四方一致
-npm test            # 56 个用例全通过（单元 + 集成，含真实 HTTP 靶场）
-node scripts/verify-flow.mjs   # CDP 驱动真机：建项目→建接口→保存→发送 200→重启后数据与历史仍在
+npm run gate             # typecheck + lint + format:check + check:channels + 全部测试
+node scripts/verify-flow.mjs             # CDP 驱动真机：建项目→建接口→发送→脚本断言→集合 Runner→重启验持久化
+node scripts/smoke-package.mjs <exe 路径>  # 打包产物冷启动冒烟
 ```
 
-真机验证要点（`scripts/verify-flow.mjs` 输出）：状态徽章 `200`、`200 OK · 15ms · 111 B`、query 参数送达靶场、重启后接口与 URL 持久化、历史 2 条、DOM 内 emoji 数 0、渲染无 console 错误。
+真机验证要点（`scripts/verify-flow.mjs` 输出）：状态徽章 `200`、`200 OK · 16ms · 112 B`、脚本两条断言在响应面板显示为通过、集合 Runner 输出「默认集合 · 1/1 项 · 通过率 100%」、query 送达靶场、重启后接口/URL/历史仍在、DOM 内 emoji 数 0、两轮 console 错误 0。
 
 ### 运行
 

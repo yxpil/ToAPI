@@ -2,6 +2,7 @@ import type { AppHello } from '@shared/channels'
 import { IpcErrorRaised } from '@shared/types'
 import type { Repos } from '../db/repo'
 import type { RequestFlow } from '../flow/request'
+import type { RunnerFlow } from '../flow/runner'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
@@ -9,6 +10,7 @@ import type { HandlerMap } from './router'
 export interface HandlerDeps {
   repos: Repos
   flow: RequestFlow
+  runner: RunnerFlow
   cancel: CancelRegistry
   hello: AppHello
 }
@@ -166,6 +168,13 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
       deps.cancel.abort(req.cancelId)
     },
     'history:list': (req) => repos.history.list(req),
+
+    'runner:start': (req) => deps.runner.start(req),
+    'runner:cancel': (req) => {
+      deps.runner.cancel(req.runId)
+    },
+    'runner:get': (req) => must(deps.repos.runner.get(req.id), '运行记录'),
+    'runner:list': (req) => deps.repos.runner.list(req.limit ?? 20),
   }
 
   return handlers

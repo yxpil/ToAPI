@@ -131,6 +131,32 @@ export function ResponsePane() {
         <div className="empty">还没有响应数据</div>
       ) : (
         <>
+          {response.script.assertions.length > 0 && (
+            <ul
+              style={{
+                listStyle: 'none',
+                margin: 0,
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--line)',
+              }}
+            >
+              {response.script.assertions.map((a, i) => (
+                <li
+                  key={`${a.name}-${i}`}
+                  style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}
+                >
+                  <Icon
+                    name={a.pass ? 'check' : 'cross'}
+                    size={14}
+                    style={{ color: a.pass ? 'var(--ok)' : 'var(--err)' }}
+                    label={a.pass ? '断言通过' : '断言失败'}
+                  />
+                  <span>{a.name}</span>
+                  {a.error && <span style={{ color: 'var(--err)' }}>— {a.error}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
           {response.extracted.length > 0 && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 12px' }}>
               {response.extracted.map((e) => (

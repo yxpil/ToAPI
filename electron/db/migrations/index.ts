@@ -9,8 +9,7 @@ export const MIGRATIONS: Migration[] = [
   {
     version: 1,
     name: '001_init',
-    up: `
-      CREATE TABLE project (
+    up: `      CREATE TABLE project (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
@@ -95,6 +94,42 @@ export const MIGRATIONS: Migration[] = [
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+    `,
+  },
+  {
+    version: 2,
+    name: '002_runner',
+    up: `
+      CREATE TABLE runner_run (
+        id TEXT PRIMARY KEY,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        scope_name TEXT NOT NULL DEFAULT '',
+        env_id TEXT,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER,
+        total INTEGER NOT NULL DEFAULT 0,
+        passed INTEGER NOT NULL DEFAULT 0,
+        failed INTEGER NOT NULL DEFAULT 0,
+        skipped INTEGER NOT NULL DEFAULT 0,
+        report_json TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX runner_run_started_idx ON runner_run(started_at DESC);
+
+      CREATE TABLE runner_item (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runner_run(id) ON DELETE CASCADE,
+        api_id TEXT,
+        api_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        history_id TEXT,
+        time_ms REAL NOT NULL DEFAULT 0,
+        assertions_json TEXT NOT NULL DEFAULT '[]',
+        logs_json TEXT NOT NULL DEFAULT '[]',
+        error TEXT,
+        sort_order REAL NOT NULL
+      );
+      CREATE INDEX runner_item_run_idx ON runner_item(run_id, sort_order);
     `,
   },
 ]

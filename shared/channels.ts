@@ -1,5 +1,6 @@
 import type {
   Api,
+  AssertionResult,
   Auth,
   BodyType,
   Collection,
@@ -9,6 +10,7 @@ import type {
   HistorySummary,
   HttpMethod,
   KvRow,
+  LogEntry,
   Project,
   ProjectNode,
   ProjectSettings,
@@ -147,6 +149,44 @@ export interface HistoryPage {
   nextCursor: string | null
 }
 
+export interface RunnerStartInput {
+  scopeType: 'collection' | 'api'
+  scopeId: string
+  envId?: string | null
+  cancelId: string
+  stopOnFail?: boolean
+  delayMs?: number
+}
+
+export interface RunnerItemView {
+  id: string
+  runId: string
+  apiId: string | null
+  apiName: string
+  status: 'passed' | 'failed' | 'skipped' | 'error'
+  historyId: string | null
+  timeMs: number
+  assertions: AssertionResult[]
+  logs: LogEntry[]
+  error: string | null
+  sortOrder: number
+}
+
+export interface RunnerRunView {
+  id: string
+  scopeType: string
+  scopeId: string
+  scopeName: string
+  envId: string | null
+  startedAt: number
+  finishedAt: number | null
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  items: RunnerItemView[]
+}
+
 // ── channel → 载荷映射（18 号文档 §1.2）──
 
 export interface ChannelMap {
@@ -174,6 +214,10 @@ export interface ChannelMap {
   'api:send': { req: SendInput; res: SendResult }
   'api:cancel': { req: CancelInput; res: void }
   'history:list': { req: HistoryListInput; res: HistoryPage }
+  'runner:start': { req: RunnerStartInput; res: { runId: string; total: number } }
+  'runner:cancel': { req: { runId: string }; res: void }
+  'runner:get': { req: IdInput; res: RunnerRunView }
+  'runner:list': { req: { limit?: number }; res: Omit<RunnerRunView, 'items'>[] }
 }
 
 export interface AppHello {
@@ -208,6 +252,10 @@ export const CHANNELS = [
   'api:send',
   'api:cancel',
   'history:list',
+  'runner:start',
+  'runner:cancel',
+  'runner:get',
+  'runner:list',
 ] as const satisfies readonly (keyof ChannelMap)[]
 
 export type ChannelName = (typeof CHANNELS)[number]
@@ -222,9 +270,13 @@ export type ResOf<K extends ChannelName> = ChannelMap[K]['res']
 
 export interface EventMap {
   'event:send-progress': { cancelId: string; phase: 'script' | 'sending' | 'receiving' }
+  'event:runner-progress': { runId: string; item: RunnerItemView; finished: boolean }
 }
 
-export const EVENT_CHANNELS = ['event:send-progress'] as const satisfies readonly (keyof EventMap)[]
+export const EVENT_CHANNELS = [
+  'event:send-progress',
+  'event:runner-progress',
+] as const satisfies readonly (keyof EventMap)[]
 
 export type EventName = (typeof EVENT_CHANNELS)[number]
 export type EventPayload<K extends EventName> = EventMap[K]

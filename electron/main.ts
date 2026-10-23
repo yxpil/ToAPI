@@ -56,6 +56,7 @@ void app.whenReady().then(() => {
     dbPath,
     filesDir,
     appVersion: app.getVersion(),
+    scriptWorkerPath: join(__dirname, 'script-worker.cjs'),
     emit: (channel, payload) => win?.webContents.send(channel, payload),
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })

@@ -5,7 +5,7 @@ import { useApp } from '../../stores/app.store'
 import { Icon } from '../../components/Icon'
 import { KvTable } from './KvTable'
 
-type Tab = 'params' | 'headers' | 'auth' | 'fake' | 'body' | 'extractors'
+type Tab = 'params' | 'headers' | 'auth' | 'fake' | 'body' | 'extractors' | 'scripts'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'params', label: 'Params' },
@@ -14,7 +14,11 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'fake', label: '伪装' },
   { id: 'body', label: 'Body' },
   { id: 'extractors', label: '提取器' },
+  { id: 'scripts', label: '脚本' },
 ]
+
+const SCRIPT_API_HINT =
+  '可用：toapi.request.setHeader/setBody/skip/send · toapi.vars/env/globals · toapi.fake.ua/header/proxy/timeout · toapi.test/expect · toapi.md5/sha256/hmacSha256/base64Encode/uuid/timestamp/sleep/log'
 
 const UA_PRESETS = [
   '@preset:chrome-win',
@@ -418,6 +422,36 @@ export function EditorPane() {
             >
               <Icon name="plus" size={14} /> 添加提取器
             </button>
+          </>
+        )}
+
+        {tab === 'scripts' && (
+          <>
+            <div className="tree-group" title={SCRIPT_API_HINT}>
+              前置脚本（发送前执行，可改写请求、发子请求、跳过）
+            </div>
+            <textarea
+              className="body-area"
+              value={api.preScript}
+              spellCheck={false}
+              aria-label="前置脚本"
+              placeholder={
+                "const ts = toapi.timestamp()\ntoapi.request.setHeader('X-Sign', toapi.md5('secret' + ts))"
+              }
+              onChange={(e) => patchApi({ preScript: e.target.value })}
+            />
+            <div className="tree-group">后置脚本（收到响应后执行，用于断言与写变量）</div>
+            <textarea
+              className="body-area"
+              value={api.postScript}
+              spellCheck={false}
+              aria-label="后置脚本"
+              placeholder={
+                "toapi.test('状态 200', () => toapi.expect(toapi.response.status).toBe(200))"
+              }
+              onChange={(e) => patchApi({ postScript: e.target.value })}
+            />
+            <div style={{ color: 'var(--ink-tertiary)', fontSize: 12 }}>{SCRIPT_API_HINT}</div>
           </>
         )}
       </div>

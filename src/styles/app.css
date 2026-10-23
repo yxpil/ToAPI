@@ -49,6 +49,27 @@ textarea {
   min-width: 0;
   overflow: hidden;
 }
+.response-col {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  min-width: 0;
+  overflow: hidden;
+}
+.response-col .response {
+  border-left: 0;
+  flex: 1;
+  min-height: 0;
+}
+.pane-switch {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.pane-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 .statusbar {
   grid-column: 1 / -1;
   border-top: 1px solid var(--line);

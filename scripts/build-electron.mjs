@@ -18,15 +18,18 @@ const common = {
   logLevel: 'warning',
 }
 
-await build({
-  ...common,
-  entryPoints: [resolve(root, 'electron/main.ts')],
-  outfile: resolve(root, 'dist-electron/main.cjs'),
-})
-await build({
-  ...common,
-  entryPoints: [resolve(root, 'electron/preload.ts')],
-  outfile: resolve(root, 'dist-electron/preload.cjs'),
-})
+const ENTRIES = [
+  ['electron/main.ts', 'dist-electron/main.cjs'],
+  ['electron/preload.ts', 'dist-electron/preload.cjs'],
+  ['electron/script/worker.ts', 'dist-electron/script-worker.cjs'],
+]
+
+for (const [entry, outfile] of ENTRIES) {
+  await build({
+    ...common,
+    entryPoints: [resolve(root, entry)],
+    outfile: resolve(root, outfile),
+  })
+}
 
 console.log('electron bundle built -> dist-electron/')

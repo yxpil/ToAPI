@@ -5,6 +5,7 @@ import { invoke } from './lib/ipc'
 import { TreePane } from './features/tree/TreePane'
 import { EditorPane } from './features/editor/EditorPane'
 import { ResponsePane } from './features/response/ResponsePane'
+import { RunnerPane } from './features/runner/RunnerPane'
 import { Icon } from './components/Icon'
 
 function StatusBar({ hello }: { hello: AppHello | null }) {
@@ -72,6 +73,7 @@ function StatusBar({ hello }: { hello: AppHello | null }) {
 export default function App() {
   const { boot, toast, dismissToast, saveApi, send, cancelSend, sendPending } = useApp()
   const [hello, setHello] = useState<AppHello | null>(null)
+  const [pane, setPane] = useState<'response' | 'runner'>('response')
 
   useEffect(() => {
     void boot()
@@ -105,7 +107,29 @@ export default function App() {
     <div className="app">
       <TreePane />
       <EditorPane />
-      <ResponsePane />
+      <div className="response-col">
+        <div className="pane-switch">
+          <div className="segmented" role="tablist" aria-label="右侧面板切换">
+            <button
+              role="tab"
+              aria-selected={pane === 'response'}
+              title="响应与历史"
+              onClick={() => setPane('response')}
+            >
+              响应
+            </button>
+            <button
+              role="tab"
+              aria-selected={pane === 'runner'}
+              title="集合 Runner 结果"
+              onClick={() => setPane('runner')}
+            >
+              Runner
+            </button>
+          </div>
+        </div>
+        {pane === 'response' ? <ResponsePane /> : <RunnerPane />}
+      </div>
       <StatusBar hello={hello} />
       {toast && (
         <div className={`toast${toast.kind === 'error' ? ' error' : ''}`} role="status">

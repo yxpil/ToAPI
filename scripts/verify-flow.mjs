@@ -183,6 +183,50 @@ try {
     return { right: Math.round(r.right), left: Math.round(r.left), vw: window.innerWidth, ok: r.right <= window.innerWidth && r.left >= 0 }
   })()`)
 
+  // ── 脚本断言：在「脚本」Tab 写后置断言并保存重发 ──
+  await app.js(`window.__h.click('脚本')`)
+  await app.waitFor(`!!document.querySelector('[aria-label="后置脚本"]')`, '脚本编辑区出现')
+  await app.js(`window.__h.set(
+    document.querySelector('[aria-label="后置脚本"]'),
+    "toapi.test('状态 200', () => toapi.expect(toapi.response.status).toBe(200))\\ntoapi.test('回显 method', () => toapi.expect(toapi.response.json().method).toBe('GET'))"
+  )`)
+  await app.js(`window.__h.click('保存 (Ctrl+S)')`)
+  await app.waitFor(
+    `document.querySelector('.toast')?.innerText.includes('已保存')`,
+    '脚本保存 Toast',
+  )
+  await app.js(`window.__h.click('发送 (Ctrl+Enter)')`)
+  await app.waitFor(
+    `document.querySelectorAll('[aria-label="断言通过"]').length >= 2`,
+    '两条断言显示为通过',
+    25000,
+  )
+  report.assertionsRendered = await app.js(
+    `document.querySelectorAll('[aria-label="断言通过"]').length`,
+  )
+
+  // ── 集合 Runner：先切到 Runner 面板（订阅进度事件），再点集合行的「运行集合」 ──
+  await app.js(`window.__h.click('集合 Runner 结果')`)
+  await app.waitFor(`!!document.querySelector('.pane-body')`, 'Runner 面板挂载')
+  await app.js(`window.__h.click('运行集合')`)
+  await app.waitFor(
+    `document.querySelectorAll('.pane-body [aria-label="断言通过"]').length > 0`,
+    'Runner 结果出现',
+    25000,
+  )
+  await app.waitFor(
+    `document.querySelector('.pane-body')?.innerText.includes('通过率')`,
+    '通过率出现',
+    20000,
+  )
+  report.runnerSummary = await app.js(
+    `document.querySelector('.response-head .meta')?.innerText ?? null`,
+  )
+  report.runnerItems = await app.js(`document.querySelectorAll('.pane-body .history-row').length`)
+  report.runnerAssertionIcons = await app.js(
+    `document.querySelectorAll('.pane-body [aria-label="断言通过"]').length`,
+  )
+
   const shot = await app.send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(resolve(root, '.tmp/toapi-flow-1.png'), Buffer.from(shot.data, 'base64'))
   report.runtimeErrorsRound1 = app.errors

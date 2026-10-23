@@ -1,0 +1,38 @@
+appId: com.toapi.desktop
+productName: ToAPI
+copyright: Copyright © 2026 ToAPI
+
+directories:
+  output: release
+  buildResources: build
+
+# 复用已下载的 Electron 解包目录，避免打包阶段再次联网拉取
+electronDist: node_modules/electron/dist
+
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+
+asar: true
+compression: normal
+# 无原生依赖需要按 Electron ABI 重编译；关掉可避免 builder 尝试重建可选原生包
+npmRebuild: false
+
+win:
+  target:
+    - target: zip
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+  # 图标需为正方形 PNG/ICO，LOGO.png 目前是 576×574，先沿用默认图标
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  artifactName: ${productName}-Setup-${version}-win-${arch}.${ext}

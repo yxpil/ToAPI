@@ -5,6 +5,8 @@ import { FileStore } from './infra/filestore'
 import { CancelRegistry } from './infra/cancel-registry'
 import { HttpEngine } from './http/engine'
 import { RequestFlow } from './flow/request'
+import { RunnerFlow } from './flow/runner'
+import { ScriptVM } from './script/vm'
 import { channelsHashOf, type HandlerMap } from './ipc/router'
 import { buildHandlers } from './ipc/handlers'
 import type { AppHello, ChannelName, EventName, EventPayload, ReqOf, ResOf } from '@shared/channels'
@@ -15,6 +17,8 @@ export interface Kernel {
   engine: HttpEngine
   cancel: CancelRegistry
   flow: RequestFlow
+  runner: RunnerFlow
+  script: ScriptVM | null
   files: FileStore
   hello: AppHello
   handlers: HandlerMap
@@ -28,6 +32,8 @@ export interface KernelOptions {
   /** 大响应体与报告的落盘根目录 */
   filesDir: string
   appVersion: string
+  /** 脚本 worker bundle 路径；缺省则禁用脚本引擎（纯请求链路仍可用） */
+  scriptWorkerPath?: string
   /** 无窗口场景（集成测试、无头 CLI）不下发事件 */
   emit?: (channel: string, payload: unknown) => void
 }
@@ -42,7 +48,11 @@ export function createKernel(options: KernelOptions): Kernel {
   const emit = <K extends EventName>(channel: K, payload: EventPayload<K>): void =>
     options.emit?.(channel, payload)
 
-  const flow = new RequestFlow({ engine, files, cancel, repos, emit })
+  const script = options.scriptWorkerPath
+    ? new ScriptVM({ workerPath: options.scriptWorkerPath })
+    : null
+  const flow = new RequestFlow({ engine, files, cancel, repos, emit, script: script ?? undefined })
+  const runner = new RunnerFlow({ repos, flow, cancel, emit })
 
   const hello: AppHello = {
     mainVersion: options.appVersion,
@@ -51,7 +61,7 @@ export function createKernel(options: KernelOptions): Kernel {
     platform: process.platform,
   }
 
-  const handlers = buildHandlers({ repos, flow, cancel, hello })
+  const handlers = buildHandlers({ repos, flow, runner, cancel, hello })
 
   const invoke = async <K extends ChannelName>(channel: K, req: ReqOf<K>): Promise<ResOf<K>> =>
     (handlers[channel] as (r: ReqOf<K>) => ResOf<K> | Promise<ResOf<K>>)(req)
@@ -62,6 +72,8 @@ export function createKernel(options: KernelOptions): Kernel {
     engine,
     cancel,
     flow,
+    runner,
+    script,
     files,
     hello,
     handlers,

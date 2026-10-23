@@ -31,6 +31,7 @@ export default defineConfig({
         },
       },
     ],
+    globalSetup: ['tests/fixtures/setup-worker.ts'],
     coverage: {
       include: ['electron/**', 'shared/**'],
       reporter: ['text', 'html'],

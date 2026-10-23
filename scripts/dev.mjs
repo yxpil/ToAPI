@@ -25,7 +25,7 @@ const common = {
   logLevel: 'warning',
 }
 
-// 主进程与 preload 用 esbuild watch 增量重建；渲染层由 vite HMR 负责
+// 主进程、preload 与脚本 worker 用 esbuild 重建；渲染层由 vite HMR 负责
 const mainCtx = await context({
   ...common,
   entryPoints: [resolve(root, 'electron/main.ts')],
@@ -36,8 +36,14 @@ const preloadCtx = await context({
   entryPoints: [resolve(root, 'electron/preload.ts')],
   outfile: resolve(root, 'dist-electron/preload.cjs'),
 })
+const workerCtx = await context({
+  ...common,
+  entryPoints: [resolve(root, 'electron/script/worker.ts')],
+  outfile: resolve(root, 'dist-electron/script-worker.cjs'),
+})
 await mainCtx.rebuild()
 await preloadCtx.rebuild()
+await workerCtx.rebuild()
 
 const vite = await createServer({
   configFile: resolve(root, 'vite.config.ts'),
@@ -57,6 +63,7 @@ const shutdown = async () => {
   child.kill()
   await mainCtx.dispose()
   await preloadCtx.dispose()
+  await workerCtx.dispose()
   await vite.close()
   process.exit(0)
 }

@@ -73,9 +73,11 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `history:list` | `{projectId?, apiId?, cursor?, limit}` | `{items, nextCursor}`（游标分页，禁止 offset） |
 | `history:get` | `{id}` | 完整含 body |
 | `history:clear` | `{projectId?, beforeTs?}` | `{deleted}` |
-| `runner:start` | `{scopeType:'collection'\|'api', scopeId, envId, options?{stopOnFail, delayMs}}` | `{runId}`（结果走事件推送） |
+| `runner:start` | `{scopeType:'collection'\|'api', scopeId, envId?, cancelId, stopOnFail?, delayMs?}` | `{runId, total}`（结果走事件推送） |
 | `runner:cancel` | `{runId}` | `{}` |
-| `runner:report` | `{runId, format:'html'\|'json'}` | `{filePath}` |
+| `runner:get` | `{id}` | `RunnerRunView`（含逐项与断言） |
+| `runner:list` | `{limit?}` | `Omit<RunnerRunView,'items'>[]` |
+| `runner:report` | `{runId, format:'html'\|'json'}` | `{filePath}`（**待实现**，M5） |
 
 ### 3.5 协作与代码（详见 08 / 09 / 10 号文档）
 | Channel | 入参 | 返回 |

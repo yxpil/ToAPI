@@ -155,4 +155,15 @@ export const INPUT_SCHEMAS = {
     cursor: z.string().max(200).nullable().optional(),
     limit: z.number().int().min(1).max(200).optional(),
   }),
+  'runner:start': z.object({
+    scopeType: z.enum(['collection', 'api']),
+    scopeId: idSchema,
+    envId: idSchema.nullable().optional(),
+    cancelId: idSchema,
+    stopOnFail: z.boolean().optional(),
+    delayMs: z.number().int().min(0).max(60000).optional(),
+  }),
+  'runner:cancel': z.object({ runId: idSchema }),
+  'runner:get': z.object({ id: idSchema }),
+  'runner:list': z.object({ limit: z.number().int().min(1).max(100).optional() }),
 } satisfies Record<ChannelName, z.ZodType>

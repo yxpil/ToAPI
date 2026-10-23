@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ProjectNode, TreeCollectionNode } from '@shared/types'
 import { useApp } from '../../stores/app.store'
+import { useRunner } from '../../stores/runner.store'
 import { Icon } from '../../components/Icon'
 
 const methodClass = (method: string): string =>
@@ -8,6 +9,7 @@ const methodClass = (method: string): string =>
 
 function CollectionBlock({ node, depth }: { node: TreeCollectionNode; depth: number }) {
   const { selectedApiId, selectApi, removeApi } = useApp()
+  const runCollection = useRunner((s) => s.runCollection)
   return (
     <>
       <div
@@ -17,6 +19,19 @@ function CollectionBlock({ node, depth }: { node: TreeCollectionNode; depth: num
       >
         <Icon name="folder" size={14} />
         <span className="label">{node.name}</span>
+        <span className="row-actions">
+          <button
+            className="pill ghost"
+            title="运行集合"
+            aria-label="运行集合"
+            onClick={(e) => {
+              e.stopPropagation()
+              void runCollection(node.id, node.name)
+            }}
+          >
+            <Icon name="send" size={14} />
+          </button>
+        </span>
       </div>
       {node.apis.map((api) => (
         <div
