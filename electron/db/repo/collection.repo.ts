@@ -1,15 +1,16 @@
 import type { Db } from '../database'
-import type { Collection } from '@shared/types'
+import type { Auth, Collection, CollectionVariable } from '@shared/types'
 import { ulid } from '../../infra/id'
-import { maxOf, num, type Row, str } from './rows'
+import { j, maxOf, num, parseJson, type Row, str } from './rows'
 
 const SQL = {
-  insert: `INSERT INTO collection (id, project_id, parent_id, name, pre_script, post_script, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  insert: `INSERT INTO collection (id, project_id, parent_id, name, description, auth, variables,
+                                   pre_script, post_script, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   byId: 'SELECT * FROM collection WHERE id = ?',
   byProject: 'SELECT * FROM collection WHERE project_id = ? ORDER BY sort_order',
-  update:
-    'UPDATE collection SET name = ?, pre_script = ?, post_script = ?, updated_at = ? WHERE id = ?',
+  update: `UPDATE collection SET name = ?, description = ?, auth = ?, variables = ?,
+           pre_script = ?, post_script = ?, updated_at = ? WHERE id = ?`,
   delete: 'DELETE FROM collection WHERE id = ?',
   sortTail: 'UPDATE collection SET sort_order = ?, updated_at = ? WHERE id = ?',
   maxSort:
@@ -21,6 +22,9 @@ export const mapCollection = (row: Row): Collection => ({
   projectId: str(row['project_id']),
   parentId: row['parent_id'] === null ? null : str(row['parent_id']),
   name: str(row['name']),
+  description: str(row['description']),
+  auth: parseJson<Auth>(str(row['auth']), { type: 'inherit' }),
+  variables: parseJson<CollectionVariable[]>(str(row['variables']), []),
   preScript: str(row['pre_script']),
   postScript: str(row['post_script']),
   sortOrder: num(row['sort_order']),
@@ -41,6 +45,9 @@ export class CollectionRepo {
       projectId: input.projectId,
       parentId: parentId === '' ? null : parentId,
       name: input.name,
+      description: '',
+      auth: { type: 'inherit' },
+      variables: [],
       preScript: '',
       postScript: '',
       sortOrder: maxOf(siblingMax) + 1000,
@@ -54,6 +61,9 @@ export class CollectionRepo {
         entity.projectId,
         entity.parentId,
         entity.name,
+        entity.description,
+        j(entity.auth),
+        j(entity.variables),
         entity.preScript,
         entity.postScript,
         entity.sortOrder,
@@ -74,12 +84,25 @@ export class CollectionRepo {
 
   update(
     id: string,
-    patch: Partial<Pick<Collection, 'name' | 'preScript' | 'postScript'>>,
+    patch: Partial<
+      Pick<Collection, 'name' | 'description' | 'auth' | 'variables' | 'preScript' | 'postScript'>
+    >,
   ): Collection | null {
     const current = this.get(id)
     if (!current) return null
     const next: Collection = { ...current, ...patch, updatedAt: Date.now() }
-    this.db.prepare(SQL.update).run(next.name, next.preScript, next.postScript, next.updatedAt, id)
+    this.db
+      .prepare(SQL.update)
+      .run(
+        next.name,
+        next.description,
+        j(next.auth),
+        j(next.variables),
+        next.preScript,
+        next.postScript,
+        next.updatedAt,
+        id,
+      )
     return next
   }
 

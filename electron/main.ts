@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createKernel, userDataPaths, type Kernel } from './kernel'
 import { registerAll } from './ipc/router'
@@ -81,6 +82,17 @@ void app.whenReady().then(() => {
       },
       close: () => win?.close(),
       isMaximized: () => win?.isMaximized() ?? false,
+    },
+    dialogs: {
+      saveText: async (defaultName, content) => {
+        const result = await dialog.showSaveDialog({
+          defaultPath: join(app.getPath('documents'), defaultName),
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        })
+        if (result.canceled || !result.filePath) return null
+        writeFileSync(result.filePath, content, 'utf8')
+        return result.filePath
+      },
     },
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })

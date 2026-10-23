@@ -24,9 +24,19 @@ export type BodyType = 'none' | 'json' | 'form' | 'urlencoded' | 'raw' | 'binary
 
 export type Auth =
   | { type: 'none' }
+  | { type: 'inherit' }
   | { type: 'bearer'; token: string }
   | { type: 'basic'; username: string; password: string }
   | { type: 'apikey'; key: string; value: string; addTo: 'header' | 'query' }
+
+/** 集合/项目级变量（Postman collection variable） */
+export interface CollectionVariable {
+  key: string
+  value: string
+  enabled: boolean
+  secret: boolean
+  desc: string
+}
 
 export interface FakeConfig {
   ua?: string
@@ -58,6 +68,11 @@ export interface Project {
   description: string
   sortOrder: number
   settings: ProjectSettings
+  /** 根集合认证（Postman 兼容，23 号文档 §3.4） */
+  auth: Auth
+  variables: CollectionVariable[]
+  preScript: string
+  postScript: string
   createdAt: number
   updatedAt: number
 }
@@ -67,6 +82,9 @@ export interface Collection {
   projectId: string
   parentId: string | null
   name: string
+  description: string
+  auth: Auth
+  variables: CollectionVariable[]
   preScript: string
   postScript: string
   sortOrder: number
@@ -78,6 +96,7 @@ export interface Api {
   id: string
   collectionId: string
   name: string
+  description: string
   method: HttpMethod
   url: string
   params: KvRow[]
@@ -110,6 +129,8 @@ export interface Variable {
   key: string
   value: string
   secret: boolean
+  /** 0 时不参与插值（Postman 禁用变量） */
+  enabled: boolean
 }
 
 export interface TreeApiNode {
@@ -202,6 +223,45 @@ export interface HistorySummary {
   sizeBytes: number
   isSubRequest: boolean
   createdAt: number
+}
+
+// ── Postman 兼容（23 号文档）──
+
+export interface PostmanWarning {
+  path: string
+  code: string
+  message: string
+}
+
+export interface PostmanInspect {
+  kind: 'collection' | 'environment'
+  name: string
+  counts: {
+    collections: number
+    apis: number
+    variables: number
+    scripts: number
+  }
+  warnings: PostmanWarning[]
+  schema: string
+}
+
+export interface PostmanImportReport {
+  projectId: string
+  environmentId?: string
+  counts: {
+    collections: number
+    apis: number
+    variables: number
+    scripts: number
+  }
+  warnings: PostmanWarning[]
+  preserved: number
+}
+
+export interface PostmanExportResult {
+  filePath: string
+  counts: { collections: number; apis: number; variables: number }
 }
 
 // ── IPC 信封（04 号文档 §2）──

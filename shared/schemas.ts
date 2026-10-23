@@ -15,6 +15,7 @@ export const bodyTypeSchema = z.enum(['none', 'json', 'form', 'urlencoded', 'raw
 
 export const authSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('none') }),
+  z.object({ type: z.literal('inherit') }),
   z.object({ type: z.literal('bearer'), token: z.string().max(8000) }),
   z.object({
     type: z.literal('basic'),
@@ -28,6 +29,14 @@ export const authSchema = z.discriminatedUnion('type', [
     addTo: z.enum(['header', 'query']),
   }),
 ])
+
+export const collectionVariableSchema = z.object({
+  key: z.string().max(200),
+  value: z.string().max(20000),
+  enabled: z.boolean(),
+  secret: z.boolean(),
+  desc: z.string().max(2000),
+})
 
 export const fakeSchema = z.object({
   ua: z.string().max(2000).optional(),
@@ -82,6 +91,10 @@ export const INPUT_SCHEMAS = {
     name: nameSchema.optional(),
     description: z.string().max(4000).optional(),
     settings: projectSettingsSchema.optional(),
+    auth: authSchema.optional(),
+    variables: z.array(collectionVariableSchema).max(500).optional(),
+    preScript: z.string().max(100000).optional(),
+    postScript: z.string().max(100000).optional(),
   }),
   'project:delete': z.object({ id: idSchema }),
   'collection:create': z.object({
@@ -92,6 +105,9 @@ export const INPUT_SCHEMAS = {
   'collection:update': z.object({
     id: idSchema,
     name: nameSchema.optional(),
+    description: z.string().max(4000).optional(),
+    auth: authSchema.optional(),
+    variables: z.array(collectionVariableSchema).max(500).optional(),
     preScript: z.string().max(100000).optional(),
     postScript: z.string().max(100000).optional(),
   }),
@@ -106,6 +122,7 @@ export const INPUT_SCHEMAS = {
   'api:update': z.object({
     id: idSchema,
     name: nameSchema.optional(),
+    description: z.string().max(4000).optional(),
     method: methodSchema.optional(),
     url: draftUrlSchema.optional(),
     params: z.array(kvRowSchema).max(500).optional(),
@@ -138,6 +155,7 @@ export const INPUT_SCHEMAS = {
     key: z.string().min(1).max(200),
     value: z.string().max(20000),
     secret: z.boolean().optional(),
+    enabled: z.boolean().optional(),
   }),
   'var:delete': z.object({ id: idSchema }),
   'api:send': z
@@ -168,6 +186,43 @@ export const INPUT_SCHEMAS = {
   'runner:cancel': z.object({ runId: idSchema }),
   'runner:get': z.object({ id: idSchema }),
   'runner:list': z.object({ limit: z.number().int().min(1).max(100).optional() }),
+  'postman:inspect': z
+    .object({
+      content: z.string().max(50_000_000).optional(),
+      filePath: z.string().max(4096).optional(),
+    })
+    .refine((v) => Boolean(v.content) !== Boolean(v.filePath), {
+      message: 'content 与 filePath 必须二选一',
+    }),
+  'postman:import': z
+    .object({
+      content: z.string().max(50_000_000).optional(),
+      filePath: z.string().max(4096).optional(),
+      targetProjectId: idSchema.optional(),
+      mode: z.enum(['new', 'into']).optional(),
+    })
+    .refine((v) => Boolean(v.content) !== Boolean(v.filePath), {
+      message: 'content 与 filePath 必须二选一',
+    }),
+  'postman:export-collection': z.object({
+    projectId: idSchema,
+    collectionIds: z.array(idSchema).max(200).optional(),
+    filePath: z.string().max(4096).optional(),
+  }),
+  'postman:import-environment': z
+    .object({
+      content: z.string().max(50_000_000).optional(),
+      filePath: z.string().max(4096).optional(),
+      projectId: idSchema,
+      mode: z.enum(['new', 'overwrite']).optional(),
+    })
+    .refine((v) => Boolean(v.content) !== Boolean(v.filePath), {
+      message: 'content 与 filePath 必须二选一',
+    }),
+  'postman:export-environment': z.object({
+    environmentId: idSchema,
+    filePath: z.string().max(4096).optional(),
+  }),
   'window:get-state': empty,
   'window:minimize': empty,
   'window:toggle-maximize': empty,

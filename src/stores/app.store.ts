@@ -5,10 +5,17 @@ import type {
   Environment,
   HistorySummary,
   IpcError,
+  PostmanImportReport,
+  PostmanInspect,
   ProjectNode,
   SendResult,
   Variable,
 } from '@shared/types'
+import type {
+  PostmanImportEnvironmentInput,
+  PostmanImportInput,
+  PostmanSource,
+} from '@shared/channels'
 import { invoke, newCancelId } from '../lib/ipc'
 import { IpcFailure } from '../lib/ipc'
 
@@ -33,6 +40,7 @@ interface AppState {
   savePending: boolean
   toast: Toast | null
   cancelId: string | null
+  postmanImportOpen: boolean
 
   boot(): Promise<void>
   refreshTree(): Promise<void>
@@ -54,6 +62,13 @@ interface AppState {
   setVar(key: string, value: string, environmentId: string | null): Promise<void>
   refreshHistory(): Promise<void>
   loadMoreHistory(): Promise<void>
+  inspectPostman(source: PostmanSource): Promise<PostmanInspect | null>
+  importPostman(input: PostmanImportInput): Promise<PostmanImportReport | null>
+  importEnvironment(input: PostmanImportEnvironmentInput): Promise<PostmanImportReport | null>
+  exportCollection(projectId: string, collectionIds?: string[]): Promise<void>
+  exportEnvironment(environmentId: string): Promise<void>
+  openPostmanImport(): void
+  closePostmanImport(): void
   dismissToast(): void
 }
 
@@ -121,6 +136,7 @@ export const useApp = create<AppState>((set, get) => {
     savePending: false,
     toast: null,
     cancelId: null,
+    postmanImportOpen: false,
 
     async boot() {
       await get().refreshTree()
@@ -357,11 +373,73 @@ export const useApp = create<AppState>((set, get) => {
       })
     },
 
+    async inspectPostman(source) {
+      const inspected = await call(invoke('postman:inspect', source))
+      return inspected ?? null
+    },
+
+    async importPostman(input) {
+      const report = await call(invoke('postman:import', input))
+      if (!report) return null
+      await get().refreshTree()
+      await get().selectProject(report.projectId)
+      set({ toast: { kind: 'ok', text: importSummary(report) } })
+      return report
+    },
+
+    async importEnvironment(input) {
+      const report = await call(invoke('postman:import-environment', input))
+      if (!report) return null
+      const projectId = get().activeProjectId
+      if (projectId) {
+        const data = await call(invoke('env:list', { projectId }))
+        if (data) set({ envs: data.envs, vars: data.vars })
+      }
+      set({ toast: { kind: 'ok', text: importSummary(report) } })
+      return report
+    },
+
+    async exportCollection(projectId, collectionIds) {
+      const result = await call(
+        invoke('postman:export-collection', {
+          projectId,
+          ...(collectionIds && collectionIds.length > 0 ? { collectionIds } : {}),
+        }),
+        (e) => {
+          if (e.code !== 'CANCELLED')
+            set({ toast: { kind: 'error', text: `${e.code}: ${e.message}` } })
+        },
+      )
+      if (result) set({ toast: { kind: 'ok', text: `已导出到 ${result.filePath}` } })
+    },
+
+    async exportEnvironment(environmentId) {
+      const result = await call(invoke('postman:export-environment', { environmentId }), (e) => {
+        if (e.code !== 'CANCELLED')
+          set({ toast: { kind: 'error', text: `${e.code}: ${e.message}` } })
+      })
+      if (result) set({ toast: { kind: 'ok', text: `已导出到 ${result.filePath}` } })
+    },
+
+    openPostmanImport() {
+      set({ postmanImportOpen: true })
+    },
+
+    closePostmanImport() {
+      set({ postmanImportOpen: false })
+    },
+
     dismissToast() {
       set({ toast: null })
     },
   }
 })
+
+const importSummary = (report: PostmanImportReport): string => {
+  const { collections, apis, variables } = report.counts
+  const base = `导入完成：${collections} 集合 · ${apis} 接口 · ${variables} 变量`
+  return report.warnings.length > 0 ? `${base} · ${report.warnings.length} 条提示` : base
+}
 
 const firstCollectionOf = (tree: ProjectNode[], projectId: string | null): string | null => {
   if (!projectId) return null

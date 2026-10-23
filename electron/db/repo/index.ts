@@ -5,6 +5,7 @@ import { EnvironmentRepo } from './environment.repo'
 import { HistoryRepo } from './history.repo'
 import { ProjectRepo } from './project.repo'
 import { RunnerRepo } from './runner.repo'
+import { SourceMetaRepo } from './source.repo'
 import { VariableRepo } from './variable.repo'
 
 export interface Repos {
@@ -15,6 +16,7 @@ export interface Repos {
   variable: VariableRepo
   history: HistoryRepo
   runner: RunnerRepo
+  source: SourceMetaRepo
 }
 
 export const createRepos = (db: Db): Repos => ({
@@ -25,6 +27,7 @@ export const createRepos = (db: Db): Repos => ({
   variable: new VariableRepo(db),
   history: new HistoryRepo(db),
   runner: new RunnerRepo(db),
+  source: new SourceMetaRepo(db),
 })
 
 export {
@@ -34,5 +37,6 @@ export {
   HistoryRepo,
   ProjectRepo,
   RunnerRepo,
+  SourceMetaRepo,
   VariableRepo,
 }

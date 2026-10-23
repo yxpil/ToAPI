@@ -132,6 +132,29 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX runner_item_run_idx ON runner_item(run_id, sort_order);
     `,
   },
+  {
+    version: 3,
+    name: '003_postman',
+    up: `
+      ALTER TABLE project ADD COLUMN auth TEXT NOT NULL DEFAULT '{"type":"none"}';
+      ALTER TABLE project ADD COLUMN variables TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE project ADD COLUMN pre_script TEXT NOT NULL DEFAULT '';
+      ALTER TABLE project ADD COLUMN post_script TEXT NOT NULL DEFAULT '';
+      ALTER TABLE project ADD COLUMN source_json TEXT NOT NULL DEFAULT '{}';
+
+      ALTER TABLE collection ADD COLUMN description TEXT NOT NULL DEFAULT '';
+      ALTER TABLE collection ADD COLUMN auth TEXT NOT NULL DEFAULT '{"type":"inherit"}';
+      ALTER TABLE collection ADD COLUMN variables TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE collection ADD COLUMN source_json TEXT NOT NULL DEFAULT '{}';
+
+      ALTER TABLE api ADD COLUMN description TEXT NOT NULL DEFAULT '';
+      ALTER TABLE api ADD COLUMN source_json TEXT NOT NULL DEFAULT '{}';
+
+      ALTER TABLE environment ADD COLUMN source_json TEXT NOT NULL DEFAULT '{}';
+
+      ALTER TABLE variable ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)

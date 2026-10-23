@@ -1,16 +1,25 @@
 import type { Db } from '../database'
-import type { Project, ProjectNode, ProjectSettings, TreeCollectionNode } from '@shared/types'
+import type {
+  Auth,
+  CollectionVariable,
+  Project,
+  ProjectNode,
+  ProjectSettings,
+  TreeCollectionNode,
+} from '@shared/types'
 import { ulid } from '../../infra/id'
 import { mapCollection } from './collection.repo'
 import { mapApi } from './api.repo'
 import { j, maxOf, num, parseJson, type Row, str } from './rows'
 
 const SQL = {
-  insert: `INSERT INTO project (id, name, description, settings, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  insert: `INSERT INTO project (id, name, description, settings, auth, variables, pre_script, post_script,
+                                sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   all: 'SELECT * FROM project ORDER BY sort_order',
   byId: 'SELECT * FROM project WHERE id = ?',
-  update: 'UPDATE project SET name = ?, description = ?, settings = ?, updated_at = ? WHERE id = ?',
+  update: `UPDATE project SET name = ?, description = ?, settings = ?, auth = ?, variables = ?,
+           pre_script = ?, post_script = ?, updated_at = ? WHERE id = ?`,
   delete: 'DELETE FROM project WHERE id = ?',
   sortTail: 'UPDATE project SET sort_order = ?, updated_at = ? WHERE id = ?',
   collections: 'SELECT * FROM collection ORDER BY sort_order',
@@ -24,6 +33,10 @@ export const mapProject = (row: Row): Project => ({
   description: str(row['description']),
   sortOrder: num(row['sort_order']),
   settings: parseJson<ProjectSettings>(str(row['settings']), {}),
+  auth: parseJson<Auth>(str(row['auth']), { type: 'none' }),
+  variables: parseJson<CollectionVariable[]>(str(row['variables']), []),
+  preScript: str(row['pre_script']),
+  postScript: str(row['post_script']),
   createdAt: num(row['created_at']),
   updatedAt: num(row['updated_at']),
 })
@@ -40,6 +53,10 @@ export class ProjectRepo {
       description: input.description ?? '',
       sortOrder: max + 1000,
       settings: {},
+      auth: { type: 'none' },
+      variables: [],
+      preScript: '',
+      postScript: '',
       createdAt: now,
       updatedAt: now,
     }
@@ -50,6 +67,10 @@ export class ProjectRepo {
         entity.name,
         entity.description,
         j(entity.settings),
+        j(entity.auth),
+        j(entity.variables),
+        entity.preScript,
+        entity.postScript,
         entity.sortOrder,
         entity.createdAt,
         entity.updatedAt,
@@ -68,14 +89,29 @@ export class ProjectRepo {
 
   update(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'description' | 'settings'>>,
+    patch: Partial<
+      Pick<
+        Project,
+        'name' | 'description' | 'settings' | 'auth' | 'variables' | 'preScript' | 'postScript'
+      >
+    >,
   ): Project | null {
     const current = this.get(id)
     if (!current) return null
     const next: Project = { ...current, ...patch, id, updatedAt: Date.now() }
     this.db
       .prepare(SQL.update)
-      .run(next.name, next.description, j(next.settings), next.updatedAt, id)
+      .run(
+        next.name,
+        next.description,
+        j(next.settings),
+        j(next.auth),
+        j(next.variables),
+        next.preScript,
+        next.postScript,
+        next.updatedAt,
+        id,
+      )
     return next
   }
 

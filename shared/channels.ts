@@ -4,6 +4,7 @@ import type {
   Auth,
   BodyType,
   Collection,
+  CollectionVariable,
   Environment,
   Extractor,
   FakeConfig,
@@ -11,6 +12,9 @@ import type {
   HttpMethod,
   KvRow,
   LogEntry,
+  PostmanExportResult,
+  PostmanImportReport,
+  PostmanInspect,
   Project,
   ProjectNode,
   ProjectSettings,
@@ -34,6 +38,10 @@ export interface UpdateProject {
   name?: string
   description?: string
   settings?: ProjectSettings
+  auth?: Auth
+  variables?: CollectionVariable[]
+  preScript?: string
+  postScript?: string
 }
 
 export interface NewCollection {
@@ -45,6 +53,9 @@ export interface NewCollection {
 export interface UpdateCollection {
   id: string
   name?: string
+  description?: string
+  auth?: Auth
+  variables?: CollectionVariable[]
   preScript?: string
   postScript?: string
 }
@@ -59,6 +70,7 @@ export interface NewApi {
 export interface UpdateApi {
   id: string
   name?: string
+  description?: string
   method?: HttpMethod
   url?: string
   params?: KvRow[]
@@ -106,6 +118,7 @@ export interface SetVariable {
   key: string
   value: string
   secret?: boolean
+  enabled?: boolean
 }
 
 export interface DeleteVariable {
@@ -192,6 +205,34 @@ export interface RunnerRunView {
   items: RunnerItemView[]
 }
 
+// ── Postman 兼容（23 号文档 §8）──
+
+export interface PostmanSource {
+  content?: string
+  filePath?: string
+}
+
+export interface PostmanImportInput extends PostmanSource {
+  targetProjectId?: string
+  mode?: 'new' | 'into'
+}
+
+export interface PostmanExportCollectionInput {
+  projectId: string
+  collectionIds?: string[]
+  filePath?: string
+}
+
+export interface PostmanImportEnvironmentInput extends PostmanSource {
+  projectId: string
+  mode?: 'new' | 'overwrite'
+}
+
+export interface PostmanExportEnvironmentInput {
+  environmentId: string
+  filePath?: string
+}
+
 // ── channel → 载荷映射（18 号文档 §1.2）──
 
 export interface ChannelMap {
@@ -223,6 +264,20 @@ export interface ChannelMap {
   'runner:cancel': { req: { runId: string }; res: void }
   'runner:get': { req: IdInput; res: RunnerRunView }
   'runner:list': { req: { limit?: number }; res: Omit<RunnerRunView, 'items'>[] }
+  'postman:inspect': { req: PostmanSource; res: PostmanInspect }
+  'postman:import': { req: PostmanImportInput; res: PostmanImportReport }
+  'postman:export-collection': {
+    req: PostmanExportCollectionInput
+    res: PostmanExportResult
+  }
+  'postman:import-environment': {
+    req: PostmanImportEnvironmentInput
+    res: PostmanImportReport
+  }
+  'postman:export-environment': {
+    req: PostmanExportEnvironmentInput
+    res: PostmanExportResult
+  }
   'window:get-state': { req: Record<string, never>; res: WindowState }
   'window:minimize': { req: Record<string, never>; res: void }
   'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
@@ -267,6 +322,11 @@ export const CHANNELS = [
   'runner:cancel',
   'runner:get',
   'runner:list',
+  'postman:inspect',
+  'postman:import',
+  'postman:export-collection',
+  'postman:import-environment',
+  'postman:export-environment',
   'window:get-state',
   'window:minimize',
   'window:toggle-maximize',

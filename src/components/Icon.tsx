@@ -59,6 +59,18 @@ const PATHS = {
     </>
   ),
   maximize: <rect x="5" y="5" width="14" height="14" rx="2" />,
+  upload: (
+    <>
+      <path d="M12 16V4M7 9l5-5 5 5" />
+      <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 4v12M7 11l5 5 5-5" />
+      <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+    </>
+  ),
   restore: (
     <>
       <rect x="4" y="9" width="11" height="11" rx="2" />

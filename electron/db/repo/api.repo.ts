@@ -4,13 +4,14 @@ import { ulid } from '../../infra/id'
 import { j, maxOf, num, optStr, parseJson, type Row, str } from './rows'
 
 const SQL = {
-  insert: `INSERT INTO api (id, collection_id, name, method, url, params, headers, body_type, body, auth, fake,
-                            pre_script, post_script, extractors, sort_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  insert: `INSERT INTO api (id, collection_id, name, description, method, url, params, headers, body_type, body,
+                            auth, fake, pre_script, post_script, extractors, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   byId: 'SELECT * FROM api WHERE id = ?',
   byCollection: 'SELECT * FROM api WHERE collection_id = ? ORDER BY sort_order',
-  update: `UPDATE api SET name = ?, method = ?, url = ?, params = ?, headers = ?, body_type = ?, body = ?, auth = ?,
-            fake = ?, pre_script = ?, post_script = ?, extractors = ?, sort_order = ?, updated_at = ? WHERE id = ?`,
+  update: `UPDATE api SET name = ?, description = ?, method = ?, url = ?, params = ?, headers = ?,
+            body_type = ?, body = ?, auth = ?, fake = ?, pre_script = ?, post_script = ?,
+            extractors = ?, sort_order = ?, updated_at = ? WHERE id = ?`,
   updateMove: 'UPDATE api SET collection_id = ?, sort_order = ?, updated_at = ? WHERE id = ?',
   delete: 'DELETE FROM api WHERE id = ?',
   sortTail: 'UPDATE api SET sort_order = ?, updated_at = ? WHERE id = ?',
@@ -23,6 +24,7 @@ export const mapApi = (row: Row): Api => ({
   id: str(row['id']),
   collectionId: str(row['collection_id']),
   name: str(row['name']),
+  description: str(row['description']),
   method: str(row['method']) as HttpMethod,
   url: str(row['url']),
   params: parseJson<KvRow[]>(str(row['params']), []),
@@ -49,6 +51,7 @@ export class ApiRepo {
       id: ulid(now),
       collectionId: input.collectionId,
       name: input.name,
+      description: '',
       method: input.method ?? 'GET',
       url: input.url ?? '',
       params: [],
@@ -75,6 +78,7 @@ export class ApiRepo {
         e.id,
         e.collectionId,
         e.name,
+        e.description,
         e.method,
         e.url,
         j(e.params),
@@ -115,6 +119,7 @@ export class ApiRepo {
       .prepare(SQL.update)
       .run(
         next.name,
+        next.description,
         next.method,
         next.url,
         j(next.params),

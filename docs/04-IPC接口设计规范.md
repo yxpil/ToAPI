@@ -84,6 +84,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | Channel | 入参 | 返回 |
 |---|---|---|
 | `tapi:export / tapi:inspect / tapi:import` | 见 08 号文档 §7 | |
+| `postman:inspect / postman:import / postman:export-collection / postman:import-environment / postman:export-environment` | 见 23 号文档 §8 | |
 | `case:run` / `codegen:from-api` / `codegen:to-api` / `testgen:from-history` / `python:detect` | 见 09 号文档 §7 | |
 | `md:interpret` / `md:open` / `md:run` / `md:sync` | 见 10 号文档 §2.3 / §4 / §5 | |
 | `open:get-config` / `open:set-config` / `open:rotate-token` / `open:list-clients` / `open:revoke-client` / `open:call-log` | 见 11 号文档 §6 | |

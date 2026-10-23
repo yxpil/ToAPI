@@ -12,6 +12,7 @@ import { TreePane } from './features/tree/TreePane'
 import { EditorPane } from './features/editor/EditorPane'
 import { ResponsePane } from './features/response/ResponsePane'
 import { RunnerPane } from './features/runner/RunnerPane'
+import { PostmanImport } from './features/postman/PostmanImport'
 import { Icon } from './components/Icon'
 import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
@@ -95,7 +96,8 @@ function TitleBar() {
 }
 
 function StatusBar({ hello }: { hello: AppHello | null }) {
-  const { envs, vars, activeProjectId, activateEnv, setVar } = useApp()
+  const { envs, vars, activeProjectId, activateEnv, setVar, openPostmanImport, exportEnvironment } =
+    useApp()
   const active = envs.find((e) => e.isActive) ?? null
   const [probeKey, setProbeKey] = useState('baseUrl')
 
@@ -126,6 +128,25 @@ function StatusBar({ hello }: { hello: AppHello | null }) {
             </option>
           ))}
         </select>
+        <button
+          className="pill ghost"
+          style={{ height: 20 }}
+          title="导入 Postman Environment…"
+          aria-label="导入 Postman 环境"
+          onClick={openPostmanImport}
+        >
+          <Icon name="upload" size={14} />
+        </button>
+        <button
+          className="pill ghost"
+          style={{ height: 20 }}
+          title="导出当前环境为 Postman Environment…"
+          aria-label="导出当前环境"
+          disabled={!active}
+          onClick={() => active && void exportEnvironment(active.id)}
+        >
+          <Icon name="download" size={14} />
+        </button>
       </label>
 
       <label className="status-item status-probe">
@@ -164,7 +185,18 @@ function StatusBar({ hello }: { hello: AppHello | null }) {
 }
 
 export default function App() {
-  const { boot, toast, dismissToast, saveApi, send, cancelSend, sendPending } = useApp()
+  const {
+    boot,
+    toast,
+    dismissToast,
+    saveApi,
+    send,
+    cancelSend,
+    sendPending,
+    postmanImportOpen,
+    closePostmanImport,
+    activeProjectId,
+  } = useApp()
   const [hello, setHello] = useState<AppHello | null>(null)
   const [pane, setPane] = useState<'response' | 'runner'>('response')
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -369,6 +401,12 @@ export default function App() {
         onClose={() => setPaletteOpen(false)}
         setPane={setPane}
         toggleOrientation={toggleOrientation}
+      />
+
+      <PostmanImport
+        open={postmanImportOpen}
+        projectId={activeProjectId}
+        onClose={closePostmanImport}
       />
 
       {toast && (

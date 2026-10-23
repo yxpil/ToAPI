@@ -322,6 +322,7 @@ try {
   report.badButtonRadius = await app.js(`(() => {
     const expected = (b) => {
       if (b.closest('.win-btn')) return '8px'
+      if (b.closest('.statusbar')) return '6px'
       if (b.closest('.text-tabs')) return '0px'
       if (b.closest('.menu-item')) return '6px'
       if (b.closest('.palette-item')) return '8px'
@@ -487,6 +488,21 @@ try {
   }
   await app.js(`document.querySelector('[data-testid="confirm-cancel"]').click()`)
   await app.waitFor(`!document.querySelector('[data-testid="confirm-dialog"]')`, '取消删除')
+
+  await app.js(`(() => {
+    const row = document.querySelector('[data-testid^="collection-"]')
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 400, clientY: 300 }))
+    return true
+  })()`)
+  await app.waitFor(`!!document.querySelector('[data-testid="context-menu"]')`, '集合右键菜单')
+  report.collectionMenu = await app.js(
+    `[...document.querySelectorAll('[data-testid="context-menu"] button')].map((b) => b.innerText)`,
+  )
+  if (!report.collectionMenu.includes('导出为 Postman Collection…')) {
+    throw new Error(`集合菜单缺少 Postman 导出：${JSON.stringify(report.collectionMenu)}`)
+  }
+  await app.js(`window.__h.key('Escape')`)
+  await app.waitFor(`!document.querySelector('[data-testid="context-menu"]')`, '集合菜单关闭')
 
   // ── 树拖拽排序并持久化（07 号文档 §3）──
   await app.js(`window.__h.click('新建接口')`)
@@ -867,6 +883,233 @@ try {
   report.historyRowCount = await app.js(`document.querySelectorAll('.history-row').length`)
   const shot2 = await app.send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(resolve(root, '.tmp/toapi-flow-2.png'), Buffer.from(shot2.data, 'base64'))
+
+  // ── Postman 资产导入（23 号文档 §8、06 号文档 §3.7）──
+  const collectionFixture = {
+    info: {
+      name: 'Postman 示例',
+      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+    },
+    auth: { type: 'bearer', bearer: [{ key: 'token', value: '{{token}}', type: 'string' }] },
+    variable: [{ key: 'baseUrl', value: 'https://api.example.com', type: 'string' }],
+    event: [
+      {
+        listen: 'prerequest',
+        script: { exec: ["toapi.log('root')"], type: 'text/javascript' },
+      },
+    ],
+    item: [
+      {
+        name: '健康检查',
+        request: {
+          method: 'GET',
+          header: [{ key: 'Accept', value: 'application/json' }],
+          url: '{{baseUrl}}/health',
+        },
+        event: [
+          {
+            listen: 'test',
+            script: {
+              exec: ["toapi.test('200', () => toapi.expect(toapi.response.status).toBe(200))"],
+              type: 'text/javascript',
+            },
+          },
+        ],
+      },
+      {
+        name: '用户',
+        item: [
+          {
+            name: '列表',
+            request: {
+              method: 'GET',
+              header: [],
+              url: {
+                raw: '{{baseUrl}}/users?page=1',
+                host: ['{{baseUrl}}'],
+                path: ['users'],
+                query: [{ key: 'page', value: '1' }],
+              },
+            },
+            event: [],
+          },
+        ],
+      },
+    ],
+  }
+  const setPostmanContent = async (content) => {
+    await app.js(
+      `window.__h.set(document.querySelector('[data-testid="postman-content"]'), ${JSON.stringify(content)})`,
+    )
+  }
+
+  await app.js(`window.__h.click('导入 Postman Collection / Environment')`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="postman-import"]')`,
+    'Postman 导入框打开',
+  )
+  {
+    const style = await app.js(`(() => {
+      const d = document.querySelector('[data-testid="postman-import"]')
+      const cs = getComputedStyle(d)
+      const ta = getComputedStyle(document.querySelector('[data-testid="postman-content"]'))
+      return {
+        width: Math.round(d.getBoundingClientRect().width),
+        radius: cs.borderRadius,
+        shadow: cs.boxShadow,
+        textareaRadius: ta.borderRadius,
+        textareaBorder: ta.borderTopWidth,
+        importDisabled: document.querySelector('[data-testid="postman-import-ok"]').disabled
+      }
+    })()`)
+    report.postmanDialog = style
+    if (
+      style.width !== 580 ||
+      style.radius !== '14px' ||
+      style.shadow !== 'none' ||
+      style.textareaRadius !== '10px' ||
+      style.textareaBorder !== '1px'
+    ) {
+      throw new Error(`Postman 导入框规格不符：${JSON.stringify(style)}`)
+    }
+    if (!style.importDisabled) throw new Error('空内容时导入按钮应禁用')
+  }
+
+  await setPostmanContent(JSON.stringify(collectionFixture, null, 2))
+  await app.waitFor(
+    `document.querySelector('.postman-kind')?.innerText === 'Collection'`,
+    '自动识别 Collection',
+  )
+  report.postmanPreview = await app.js(`(() => ({
+    kind: document.querySelector('.postman-kind')?.innerText,
+    name: document.querySelector('.postman-name')?.innerText,
+    counts: document.querySelector('.postman-counts')?.innerText,
+    modes: [...document.querySelectorAll('.postman-modes label')].map((e) => e.innerText),
+    importDisabled: document.querySelector('[data-testid="postman-import-ok"]').disabled
+  }))()`)
+  if (
+    report.postmanPreview.name !== 'Postman 示例' ||
+    !String(report.postmanPreview.counts).includes('1 集合') ||
+    !String(report.postmanPreview.counts).includes('2 接口') ||
+    !report.postmanPreview.modes.includes('新建项目') ||
+    report.postmanPreview.importDisabled
+  ) {
+    throw new Error(`Postman 预览不符：${JSON.stringify(report.postmanPreview)}`)
+  }
+  const dialogShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(
+    resolve(root, '.tmp/toapi-postman-dialog.png'),
+    Buffer.from(dialogShot.data, 'base64'),
+  )
+  await app.js(`document.querySelector('[data-testid="postman-import-ok"]').click()`)
+  await app.waitFor(`!!document.querySelector('.toast')`, 'Postman Collection 导入返回', 20000)
+  report.postmanToast = await app.js(`document.querySelector('.toast')?.innerText ?? null`)
+  if (!String(report.postmanToast).includes('导入完成：2 集合 · 2 接口 · 1 变量')) {
+    throw new Error(`Collection 导入结果不符：${report.postmanToast}`)
+  }
+  await app.waitFor(`!document.querySelector('[data-testid="postman-import"]')`, '导入框自动关闭')
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="project-"]')].some((e) => e.innerText.includes('Postman 示例'))`,
+    '导入项目入树',
+  )
+  report.postmanToast = await app.js(`document.querySelector('.toast')?.innerText ?? null`)
+
+  await app.js(`(() => {
+    const row = [...document.querySelectorAll('[data-testid^="project-"]')].find((e) => e.innerText.includes('Postman 示例'))
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 200, clientY: 300 }))
+    return true
+  })()`)
+  await app.waitFor(`!!document.querySelector('[data-testid="context-menu"]')`, '项目菜单打开')
+  report.postmanMenu = await app.js(
+    `[...document.querySelectorAll('[data-testid="context-menu"] button')].map((b) => b.innerText)`,
+  )
+  if (
+    !report.postmanMenu.includes('导入 Postman…') ||
+    !report.postmanMenu.includes('导出为 Postman Collection…')
+  ) {
+    throw new Error(`项目菜单缺少 Postman 项：${JSON.stringify(report.postmanMenu)}`)
+  }
+  await app.js(`window.__h.key('Escape')`)
+  await app.waitFor(`!document.querySelector('[data-testid="context-menu"]')`, '项目菜单关闭')
+
+  // 再次导入同名集合：应弹出导入报告（23 号文档 §3.6、§8）
+  await app.js(`window.__h.click('导入 Postman Collection / Environment')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="postman-import"]')`, '再次打开导入框')
+  await setPostmanContent(JSON.stringify(collectionFixture, null, 2))
+  await app.waitFor(
+    `document.querySelector('.postman-kind')?.innerText === 'Collection'`,
+    '再次识别',
+  )
+  await app.js(`document.querySelector('[data-testid="postman-import-ok"]').click()`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="postman-report"]')`,
+    '导入报告弹出',
+    20000,
+  )
+  report.postmanReport = await app.js(`(() => ({
+    text: document.querySelector('[data-testid="postman-report"]')?.innerText,
+    warnings: document.querySelectorAll('[data-testid="postman-report"] .postman-warnings li').length
+  }))()`)
+  if (
+    !String(report.postmanReport.text).includes('导入报告') ||
+    !String(report.postmanReport.text).includes('条提示') ||
+    report.postmanReport.warnings < 1
+  ) {
+    throw new Error(`导入报告不符：${JSON.stringify(report.postmanReport)}`)
+  }
+  await app.js(`document.querySelector('[data-testid="postman-report-done"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="postman-report"]')`, '导入报告关闭')
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="project-"]')].some((e) => e.innerText.includes('Postman 示例 (2)'))`,
+    '同名项目去重入树',
+  )
+
+  // Environment 导入：底栏按钮 → 自动识别 → 写入当前项目
+  const environmentFixture = {
+    id: 'env-postman-demo',
+    name: 'Postman 演示',
+    values: [
+      { key: 'baseUrl', value: 'https://demo.example.com', type: 'default', enabled: true },
+      { key: 'token', value: 'secret', type: 'secret', enabled: false },
+    ],
+    _postman_variable_scope: 'environment',
+  }
+  await app.js(`window.__h.click('导入 Postman Environment…')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="postman-import"]')`, '环境导入框打开')
+  await setPostmanContent(JSON.stringify(environmentFixture, null, 2))
+  await app.waitFor(
+    `document.querySelector('.postman-kind')?.innerText === 'Environment'`,
+    '自动识别 Environment',
+  )
+  report.postmanEnvPreview = await app.js(`(() => ({
+    counts: document.querySelector('.postman-counts')?.innerText,
+    overwrite: document.querySelector('.postman-overwrite')?.innerText,
+    modes: document.querySelectorAll('.postman-modes').length
+  }))()`)
+  if (
+    !String(report.postmanEnvPreview.counts).includes('2 变量') ||
+    !String(report.postmanEnvPreview.overwrite).includes('同名环境覆盖变量') ||
+    report.postmanEnvPreview.modes !== 0
+  ) {
+    throw new Error(`Environment 预览不符：${JSON.stringify(report.postmanEnvPreview)}`)
+  }
+  await app.js(`document.querySelector('[data-testid="postman-import-ok"]').click()`)
+  await app.waitFor(
+    `document.querySelector('.toast')?.innerText.includes('导入完成：0 集合 · 0 接口 · 2 变量')`,
+    'Postman Environment 导入完成',
+    20000,
+  )
+  await app.waitFor(
+    `[...document.querySelectorAll('.statusbar option')].some((o) => o.innerText === 'Postman 演示')`,
+    '环境进入底栏下拉',
+  )
+  report.postmanEnvOption = await app.js(
+    `[...document.querySelectorAll('.statusbar option')].filter((o) => o.innerText === 'Postman 演示').length`,
+  )
+
+  const postmanShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(resolve(root, '.tmp/toapi-postman.png'), Buffer.from(postmanShot.data, 'base64'))
+
   report.runtimeErrorsRound2 = app.errors
 
   // 关闭也走自绘标题栏：应等价原生关闭并退出进程（Windows 最后一窗）
@@ -885,5 +1128,7 @@ report.screenshots = [
   '.tmp/toapi-flow-2.png',
   '.tmp/toapi-select.png',
   '.tmp/toapi-titlebar.png',
+  '.tmp/toapi-postman.png',
+  '.tmp/toapi-postman-dialog.png',
 ]
 console.log(JSON.stringify(report, null, 2))

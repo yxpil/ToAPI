@@ -4,10 +4,10 @@ import { ulid } from '../../infra/id'
 import { bool, optStr, type Row, str } from './rows'
 
 const SQL = {
-  upsert: `INSERT INTO variable (id, scope, environment_id, key, value, secret)
-           VALUES (?, ?, ?, ?, ?, ?)
+  upsert: `INSERT INTO variable (id, scope, environment_id, key, value, secret, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(scope, IFNULL(environment_id, ''), key)
-           DO UPDATE SET value = excluded.value, secret = excluded.secret`,
+           DO UPDATE SET value = excluded.value, secret = excluded.secret, enabled = excluded.enabled`,
   globals: "SELECT * FROM variable WHERE scope = 'global' ORDER BY key",
   forEnv: "SELECT * FROM variable WHERE scope = 'environment' AND environment_id = ? ORDER BY key",
   byId: 'SELECT * FROM variable WHERE id = ?',
@@ -25,6 +25,7 @@ export const mapVariable = (row: Row): Variable => ({
   key: str(row['key']),
   value: str(row['value']),
   secret: bool(row['secret']),
+  enabled: bool(row['enabled']),
 })
 
 export class VariableRepo {
@@ -36,13 +37,22 @@ export class VariableRepo {
     key: string
     value: string
     secret?: boolean
+    enabled?: boolean
   }): Variable {
     const envKey = input.scope === 'environment' ? (input.environmentId ?? null) : null
     const existing = this.find(input.scope, envKey, input.key)
     const id = existing?.id ?? ulid()
     this.db
       .prepare(SQL.upsert)
-      .run(id, input.scope, envKey, input.key, input.value, input.secret ? 1 : 0)
+      .run(
+        id,
+        input.scope,
+        envKey,
+        input.key,
+        input.value,
+        input.secret ? 1 : 0,
+        input.enabled === false ? 0 : 1,
+      )
     const row = this.db.prepare(SQL.byKey).get(input.scope, envKey ?? '', input.key) as
       Row | undefined
     return row
@@ -54,6 +64,7 @@ export class VariableRepo {
           key: input.key,
           value: input.value,
           secret: Boolean(input.secret),
+          enabled: input.enabled !== false,
         }
   }
 

@@ -314,6 +314,8 @@ export function TreePane() {
     duplicateApi,
     selectApi,
     moveNode,
+    openPostmanImport,
+    exportCollection,
   } = useApp()
   const [name, setName] = useState('')
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -339,6 +341,11 @@ export function TreePane() {
       return [
         { label: '新建集合', onSelect: () => void createCollection('新集合') },
         { label: '新建接口', onSelect: () => void createApi('新接口') },
+        { label: '导入 Postman…', onSelect: openPostmanImport },
+        {
+          label: '导出为 Postman Collection…',
+          onSelect: () => void exportCollection(state.node.project.id),
+        },
         {
           label: '删除项目',
           danger: true,
@@ -358,6 +365,10 @@ export function TreePane() {
         {
           label: '运行集合',
           onSelect: () => void useRunner.getState().runCollection(state.node.id, state.node.name),
+        },
+        {
+          label: '导出为 Postman Collection…',
+          onSelect: () => void exportCollection(state.projectId, [state.node.id]),
         },
         {
           label: '删除集合',
@@ -404,6 +415,15 @@ export function TreePane() {
         />
         <button className="pill ghost" title="创建项目" aria-label="创建项目" onClick={submit}>
           <Icon name="plus" size={14} />
+        </button>
+        <button
+          className="pill ghost"
+          title="导入 Postman Collection / Environment"
+          aria-label="导入 Postman"
+          data-testid="postman-open"
+          onClick={openPostmanImport}
+        >
+          <Icon name="upload" size={14} />
         </button>
       </div>
 

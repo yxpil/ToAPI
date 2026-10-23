@@ -1183,6 +1183,132 @@ select option::checkmark {
   justify-content: flex-end;
   gap: var(--sp-2);
 }
+
+/* ── Postman 导入（23 号文档 §8）── */
+.postman-dialog {
+  width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.postman-dialog .dialog-title {
+  margin-bottom: 0;
+}
+.postman-dialog .dialog-text {
+  margin-bottom: 0;
+}
+.postman-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.postman-filename {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-tertiary);
+}
+.postman-textarea {
+  width: 100%;
+  min-height: 140px;
+  max-height: 260px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.postman-textarea:focus {
+  border-color: var(--ink);
+}
+.postman-textarea::placeholder {
+  color: var(--ink-tertiary);
+}
+.postman-error {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: 0;
+  font-size: 12px;
+  color: var(--err);
+}
+.postman-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: var(--sp-3);
+}
+.postman-preview-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.postman-kind {
+  height: 20px;
+  font-size: 11px;
+  color: var(--ink-secondary);
+  background: var(--bg-subtle);
+}
+.postman-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.postman-counts {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+.postman-warnings {
+  margin: 0;
+  padding-left: 16px;
+  max-height: 96px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-secondary);
+}
+.postman-warnings code {
+  font-size: 11px;
+  color: var(--ink-tertiary);
+}
+.postman-report .postman-warnings {
+  max-height: 240px;
+}
+.postman-modes {
+  display: flex;
+  gap: var(--sp-4);
+  font-size: 13px;
+}
+.postman-modes label,
+.postman-overwrite {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  cursor: pointer;
+}
+.postman-modes label.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.postman-dialog .dialog-actions {
+  padding-top: var(--sp-1);
+}
 .palette-overlay {
   align-items: flex-start;
   padding-top: 12vh;

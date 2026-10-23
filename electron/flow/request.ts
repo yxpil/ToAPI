@@ -2,6 +2,7 @@ import type {
   Api,
   AssertionResult,
   Auth,
+  Collection,
   ExtractedValue,
   Extractor,
   FakeConfig,
@@ -30,7 +31,7 @@ import { preview, runAll } from '../vars/extractor'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import type { FileStore } from '../infra/filestore'
 import type { ScriptVM } from '../script/vm'
-import type { ScriptRequest, SubRequestCall, SubRequestResult } from '../script/protocol'
+import type { SubRequestCall, SubRequestResult } from '../script/protocol'
 
 /** 超过该字节数的响应体落文件，DB 只存路径（03 号文档 §5） */
 export const INLINE_BODY_LIMIT = 256 * 1024
@@ -52,6 +53,8 @@ interface ResolvedTarget {
   apiId: string | null
   projectId: string
   project: Project | null
+  /** 集合链由外到内，用于认证/变量/脚本继承（23 号文档 §3.1） */
+  collectionChain: Collection[]
   environmentId: string | null
   method: Api['method']
   url: string
@@ -61,8 +64,8 @@ interface ResolvedTarget {
   body: string
   auth: Auth
   fake: FakeConfig
-  preScript: string
-  postScript: string
+  preScripts: string[]
+  postScripts: string[]
   extractors: Extractor[]
   isSubRequest: boolean
 }
@@ -78,6 +81,49 @@ const rowsToRecord = (rows: KvRow[]): Record<string, string> => {
   const out: Record<string, string> = {}
   for (const r of rows) if (r.enabled && r.key) out[r.key] = r.value
   return out
+}
+
+/** 从叶子集合向上收集到根，返回由外到内的链；断层或环则截断 */
+const collectionChain = (repos: Repos, leafId: string | null): Collection[] => {
+  if (!leafId) return []
+  const chain: Collection[] = []
+  const seen = new Set<string>()
+  let current = repos.collection.get(leafId)
+  while (current && !seen.has(current.id) && chain.length < 64) {
+    seen.add(current.id)
+    chain.push(current)
+    current = current.parentId ? repos.collection.get(current.parentId) : null
+  }
+  return chain.reverse()
+}
+
+/** api → 集合链 → project：取第一个非 inherit/none 的认证（23 号文档 §3.1） */
+const inheritAuth = (apiAuth: Auth, chain: Collection[], project: Project | null): Auth => {
+  if (apiAuth.type !== 'inherit' && apiAuth.type !== 'none') return apiAuth
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    const auth = chain[i]?.auth
+    if (auth && auth.type !== 'inherit' && auth.type !== 'none') return auth
+  }
+  const root = project?.auth
+  if (root && root.type !== 'inherit' && root.type !== 'none') return root
+  return { type: 'none' }
+}
+
+const collectScripts = (
+  project: Project | null,
+  chain: Collection[],
+  apiPre: string,
+  apiPost: string,
+): { preScripts: string[]; postScripts: string[] } => {
+  const keep = (code: string): boolean => code.trim() !== ''
+  return {
+    preScripts: [project?.preScript ?? '', ...chain.map((c) => c.preScript), apiPre].filter(keep),
+    postScripts: [
+      apiPost,
+      ...[...chain].reverse().map((c) => c.postScript),
+      project?.postScript ?? '',
+    ].filter(keep),
+  }
 }
 
 /** 沙箱返回的 header 记录回写为 KvRow：保留原顺序，删除未出现的键，追加新键 */
@@ -129,13 +175,18 @@ export class RequestFlow {
     this.jars.clear()
   }
 
-  /** 合并顺序即优先级：全局 → 环境 → runtime 后者覆盖（05 号文档 §2） */
+  /** 合并顺序即优先级：全局 → 项目根 → 集合链由外到内 → 环境 → runtime（23 号文档 §3.1） */
   private mergedVars(target: ResolvedTarget): Map<string, string> {
     const { repos } = this.deps
     const merged = new Map<string, string>()
-    for (const v of repos.variable.listGlobals()) merged.set(v.key, v.value)
+    for (const v of repos.variable.listGlobals()) if (v.enabled) merged.set(v.key, v.value)
+    for (const v of target.project?.variables ?? []) if (v.enabled) merged.set(v.key, v.value)
+    for (const collection of target.collectionChain) {
+      for (const v of collection.variables) if (v.enabled) merged.set(v.key, v.value)
+    }
     if (target.environmentId) {
-      for (const v of repos.variable.listForEnv(target.environmentId)) merged.set(v.key, v.value)
+      for (const v of repos.variable.listForEnv(target.environmentId))
+        if (v.enabled) merged.set(v.key, v.value)
     }
     for (const [k, v] of this.runtimeFor(target.projectId)) merged.set(k, v)
     return merged
@@ -160,12 +211,14 @@ export class RequestFlow {
     if (input.apiId) {
       const api = repos.api.get(input.apiId)
       if (!api) throw new IpcErrorRaised({ code: 'NOT_FOUND', message: '接口不存在' })
-      const collection = repos.collection.get(api.collectionId)
-      const projectId = collection?.projectId ?? ''
+      const chain = collectionChain(repos, api.collectionId)
+      const projectId = chain[0]?.projectId ?? ''
+      const project = projectId ? repos.project.get(projectId) : null
       return {
         apiId: api.id,
         projectId,
-        project: projectId ? repos.project.get(projectId) : null,
+        project,
+        collectionChain: chain,
         environmentId: pickEnv(projectId),
         method: api.method,
         url: api.url,
@@ -173,10 +226,9 @@ export class RequestFlow {
         headers: api.headers,
         bodyType: api.bodyType,
         body: api.body,
-        auth: api.auth,
+        auth: inheritAuth(api.auth, chain, project),
         fake: api.fake,
-        preScript: api.preScript,
-        postScript: api.postScript,
+        ...collectScripts(project, chain, api.preScript, api.postScript),
         extractors: api.extractors,
         isSubRequest: false,
       }
@@ -185,11 +237,14 @@ export class RequestFlow {
     const draft = input.draft
     if (!draft)
       throw new IpcErrorRaised({ code: 'VALIDATION', message: 'apiId 与 draft 必须二选一' })
-    const projectId = draft.projectId ?? ''
+    const chain = collectionChain(repos, draft.collectionId ?? null)
+    const projectId = draft.projectId ?? chain[0]?.projectId ?? ''
+    const project = projectId ? repos.project.get(projectId) : null
     return {
       apiId: null,
       projectId,
-      project: projectId ? repos.project.get(projectId) : null,
+      project,
+      collectionChain: chain,
       environmentId: pickEnv(projectId),
       method: draft.method,
       url: draft.url,
@@ -197,10 +252,9 @@ export class RequestFlow {
       headers: draft.headers ?? [],
       bodyType: draft.bodyType ?? 'none',
       body: draft.body ?? '',
-      auth: draft.auth ?? { type: 'none' },
+      auth: inheritAuth(draft.auth ?? { type: 'none' }, chain, project),
       fake: draft.fake ?? {},
-      preScript: '',
-      postScript: '',
+      ...collectScripts(project, chain, '', ''),
       extractors: [],
       isSubRequest: false,
     }
@@ -316,6 +370,7 @@ export class RequestFlow {
       apiId: null,
       projectId,
       project: projectId ? this.deps.repos.project.get(projectId) : null,
+      collectionChain: [],
       environmentId: projectId
         ? (this.deps.repos.environment.activeFor(projectId)?.id ?? null)
         : null,
@@ -332,8 +387,8 @@ export class RequestFlow {
       body: call.body ?? '',
       auth: { type: 'none' },
       fake: call.fake ?? {},
-      preScript: '',
-      postScript: '',
+      preScripts: [],
+      postScripts: [],
       extractors: [],
       isSubRequest: true,
     }
@@ -358,73 +413,74 @@ export class RequestFlow {
     let workingRows = target.headers
     let workingAuth = target.auth
     const preLogs: LogEntry[] = []
-    let preAssertions: AssertionResult[] = []
+    const preAssertions: AssertionResult[] = []
 
-    if (this.deps.script && target.preScript.trim()) {
-      const jobRequest: ScriptRequest = {
-        method,
-        url,
-        headers: rowsToRecord(target.headers),
-        body: bodyText,
-        bodyType,
-      }
-      const outcome = await this.deps.script.run(
-        {
-          kind: 'pre',
-          code: target.preScript,
-          timeoutMs: SCRIPT_TIMEOUT_MS,
-          request: jobRequest,
-          vars: Object.fromEntries(this.mergedVars(target)),
-          projectId: target.projectId,
-          auth: target.auth,
-        },
-        {
-          subRequest: (call) => this.sendSub(call, ctx),
-          varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
-        },
-      )
-      preLogs.push(...outcome.logs)
-      preAssertions = outcome.assertions
-      for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
-        this.runtimeFor(target.projectId).set(k, v)
-      }
-      if (outcome.error) {
-        throw new IpcErrorRaised({
-          code: outcome.error.code,
-          message: `前置脚本：${outcome.error.message}`,
-        })
-      }
-      if (outcome.skip !== undefined) {
-        return {
-          finalRequest: { method, url, headers: [] },
-          response: {
-            status: 0,
-            statusText: '',
-            headers: [],
-            redirects: [],
-            timeMs: 0,
-            bodySizeBytes: 0,
+    if (this.deps.script) {
+      for (const code of target.preScripts) {
+        const outcome = await this.deps.script.run(
+          {
+            kind: 'pre',
+            code,
+            timeoutMs: SCRIPT_TIMEOUT_MS,
+            request: {
+              method,
+              url,
+              headers: rowsToRecord(workingRows),
+              body: bodyText,
+              bodyType,
+            },
+            vars: Object.fromEntries(this.mergedVars(target)),
+            projectId: target.projectId,
+            auth: workingAuth,
           },
-          script: { preLogs, postLogs: [], assertions: preAssertions },
-          extracted: [],
-          historyId: '',
-          skipped: true,
-          skipReason: outcome.skip,
-        }
-      }
-      if (outcome.request) {
-        method = outcome.request.method
-        url = outcome.request.url
-        bodyText = outcome.request.body
-        bodyType = (outcome.request.bodyType ?? bodyType) as Api['bodyType']
-        workingRows = recordToRows(target.headers, outcome.request.headers)
-        // 脚本自己写了 Authorization 时不再叠加 Auth 配置，避免覆盖脚本意图
-        const touchedAuth = Object.keys(outcome.request.headers).some(
-          (k) => k.toLowerCase() === 'authorization',
+          {
+            subRequest: (call) => this.sendSub(call, ctx),
+            varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
+          },
         )
-        workingAuth = touchedAuth ? { type: 'none' } : target.auth
+        preLogs.push(...outcome.logs)
+        preAssertions.push(...outcome.assertions)
+        for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
+          this.runtimeFor(target.projectId).set(k, v)
+        }
+        if (outcome.error) {
+          throw new IpcErrorRaised({
+            code: outcome.error.code,
+            message: `前置脚本：${outcome.error.message}`,
+          })
+        }
+        if (outcome.skip !== undefined) {
+          return {
+            finalRequest: { method, url, headers: [] },
+            response: {
+              status: 0,
+              statusText: '',
+              headers: [],
+              redirects: [],
+              timeMs: 0,
+              bodySizeBytes: 0,
+            },
+            script: { preLogs, postLogs: [], assertions: preAssertions },
+            extracted: [],
+            historyId: '',
+            skipped: true,
+            skipReason: outcome.skip,
+          }
+        }
+        if (outcome.request) {
+          method = outcome.request.method
+          url = outcome.request.url
+          bodyText = outcome.request.body
+          bodyType = (outcome.request.bodyType ?? bodyType) as Api['bodyType']
+          workingRows = recordToRows(workingRows, outcome.request.headers)
+          // 脚本自己写了 Authorization 时不再叠加 Auth 配置，避免覆盖脚本意图
+          const touchedAuth = Object.keys(outcome.request.headers).some(
+            (k) => k.toLowerCase() === 'authorization',
+          )
+          workingAuth = touchedAuth ? { type: 'none' } : workingAuth
+        }
+        fake = { ...fake, ...outcome.fakePatch }
       }
-      fake = { ...fake, ...outcome.fakePatch }
     }
 
     // Header 在伪装补丁合并后再算一次，保证 toapi.fake.ua/header 真实落线
@@ -510,42 +566,47 @@ export class RequestFlow {
 
     const extracted = this.applyExtractors(target.extractors, res, target.projectId)
     const postLogs: LogEntry[] = []
-    let assertions: AssertionResult[] = []
+    const assertions: AssertionResult[] = []
 
-    if (this.deps.script && target.postScript.trim()) {
-      const outcome = await this.deps.script.run(
-        {
-          kind: 'post',
-          code: target.postScript,
-          timeoutMs: SCRIPT_TIMEOUT_MS,
-          request: { method, url, headers: Object.fromEntries(headers), body: bodyText, bodyType },
-          response: {
-            status: res.status,
-            statusText: res.statusText,
-            headers: res.headers,
-            body: inline ? responseBody : responseBody.slice(0, INLINE_BODY_LIMIT),
-            timeMs: res.timeMs,
+    if (this.deps.script) {
+      for (const code of target.postScripts) {
+        const outcome = await this.deps.script.run(
+          {
+            kind: 'post',
+            code,
+            timeoutMs: SCRIPT_TIMEOUT_MS,
+            request: {
+              method,
+              url,
+              headers: Object.fromEntries(headers),
+              body: bodyText,
+              bodyType,
+            },
+            response: {
+              status: res.status,
+              statusText: res.statusText,
+              headers: res.headers,
+              body: inline ? responseBody : responseBody.slice(0, INLINE_BODY_LIMIT),
+              timeMs: res.timeMs,
+            },
+            vars: Object.fromEntries(this.mergedVars(target)),
+            projectId: target.projectId,
+            auth: workingAuth,
           },
-          vars: Object.fromEntries(this.mergedVars(target)),
-          projectId: target.projectId,
-          auth: target.auth,
-        },
-        {
-          subRequest: (call) => this.sendSub(call, ctx),
-          varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
-        },
-      )
-      postLogs.push(...outcome.logs)
-      assertions = outcome.assertions
-      for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
-        this.runtimeFor(target.projectId).set(k, v)
+          {
+            subRequest: (call) => this.sendSub(call, ctx),
+            varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
+          },
+        )
+        postLogs.push(...outcome.logs)
+        assertions.push(...outcome.assertions)
+        for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
+          this.runtimeFor(target.projectId).set(k, v)
+        }
+        // 后置脚本自身出错不推翻已收到的响应，以失败断言呈现；后续脚本继续执行（05 号文档 §6）
+        if (outcome.error)
+          assertions.push({ name: '后置脚本执行', pass: false, error: outcome.error.message })
       }
-      // post 脚本自身出错不推翻已收到的响应，以失败断言呈现（05 号文档 §6）
-      if (outcome.error)
-        assertions = [
-          ...assertions,
-          { name: '后置脚本执行', pass: false, error: outcome.error.message },
-        ]
     }
 
     return {
