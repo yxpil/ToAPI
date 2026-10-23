@@ -58,7 +58,7 @@ AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失
 | M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；批量报告导出待做 |
 | M5.5–M8 | 未开始 | TAPI、MD 文档、开放调用/MCP、定时与压测、国际化与多平台 |
 
-**已发布 v0.1.0**：`release/ToAPI-Setup-0.1.0-win-x64.exe`（NSIS 安装器）与 `release/ToAPI-0.1.0-win-x64.zip`（便携版），附 `sha256sums.txt`。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
+**已发布 v0.1.1**：`ToAPI-Setup-0.1.1-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.1-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.1 修掉 URL 输入框被标题行挤到 4px 宽的布局缺陷（现独占一行，实测 239px），并在真机验证里加了宽度回归断言。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
 
 ### 已跑过的验证（不是声明，是实测）
 

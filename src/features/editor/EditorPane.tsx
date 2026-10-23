@@ -59,6 +59,23 @@ export function EditorPane() {
 
   return (
     <div className="workspace">
+      <div className="title-row">
+        <input
+          className="name-input"
+          value={api.name}
+          aria-label="接口名称"
+          placeholder="接口名称"
+          onChange={(e) => patchApi({ name: e.target.value })}
+        />
+        <button
+          className="pill"
+          title="保存 (Ctrl+S)"
+          onClick={() => void saveApi()}
+          disabled={savePending}
+        >
+          {savePending ? <span className="spinner" /> : <Icon name="check" size={14} />} 保存
+        </button>
+      </div>
       <div className="url-bar">
         <div className="url-capsule">
           <select
@@ -91,21 +108,6 @@ export function EditorPane() {
             {sendPending ? <span className="spinner" /> : <Icon name="send" size={14} />} 发送
           </button>
         </div>
-        <input
-          className="name-input"
-          value={api.name}
-          aria-label="接口名称"
-          placeholder="接口名称"
-          onChange={(e) => patchApi({ name: e.target.value })}
-        />
-        <button
-          className="pill"
-          title="保存 (Ctrl+S)"
-          onClick={() => void saveApi()}
-          disabled={savePending}
-        >
-          {savePending ? <span className="spinner" /> : <Icon name="check" size={14} />} 保存
-        </button>
       </div>
 
       <div style={{ padding: '0 var(--sp-3) var(--sp-2)' }}>

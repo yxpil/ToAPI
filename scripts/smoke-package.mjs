@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -23,6 +23,7 @@ const safeRm = (p) => {
 
 const exe = resolve(exeArg)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version
 const port = 9336
 const profile = resolve(root, '.tmp/smoke-profile')
 
@@ -96,7 +97,7 @@ await send('Log.enable')
 let handshake = false
 for (let i = 0; i < 40 && !handshake; i++) {
   handshake = await js(
-    `document.querySelector('.statusbar')?.innerText.includes('v0.1.0') ?? false`,
+    `document.querySelector('.statusbar')?.innerText.includes('v${version}') ?? false`,
   )
   if (!handshake) await wait(500)
 }

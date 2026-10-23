@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const electronBin = require('electron')
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const APP_VERSION = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version
 const port = 9334
 const profile = resolve(root, '.tmp/e2e-flow-profile')
 
@@ -132,7 +133,7 @@ try {
   // ── 第一轮：建项目 → 建接口 → 发请求 ──
   let app = await launch()
   await app.waitFor(
-    'document.querySelector(".statusbar")?.innerText.includes("v0.1.0")',
+    `document.querySelector(".statusbar")?.innerText.includes("v${APP_VERSION}")`,
     '主进程握手',
   )
 
@@ -176,6 +177,12 @@ try {
     `(document.body.innerText.match(/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/gu) || []).length`,
   )
   report.pillRadius = await app.js(`getComputedStyle(document.querySelector('.pill')).borderRadius`)
+  report.urlInputWidth = await app.js(
+    `Math.round(document.querySelector('[aria-label="请求 URL"]').getBoundingClientRect().width)`,
+  )
+  if (report.urlInputWidth < 200) {
+    throw new Error(`URL 输入框被挤压：宽度 ${report.urlInputWidth}px（应 ≥ 200px）`)
+  }
   report.saveButtonInViewport = await app.js(`(() => {
     const b = [...document.querySelectorAll('[title]')].find((e) => e.title === '保存 (Ctrl+S)')
     if (!b) return null

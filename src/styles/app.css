@@ -128,12 +128,37 @@ textarea {
   border-color: var(--err);
 }
 
-/* ── URL 大胶囊（06 号文档 §3.3）── */
+/* ── 标题行 + URL 大胶囊（06 号文档 §3.3）── */
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) 0;
+}
+.name-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  padding: 0 var(--sp-3);
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+.name-input:hover {
+  background: var(--bg-subtle);
+}
+.name-input:focus {
+  border-color: var(--ink);
+  background: var(--bg);
+}
 .url-bar {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
 }
 .url-capsule {
   display: flex;
@@ -161,24 +186,11 @@ textarea {
 }
 .url-input {
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
   border: 0;
   outline: none;
   background: transparent;
   font-family: var(--font-mono);
-}
-.name-input {
-  flex: none;
-  height: var(--h-pill);
-  width: 180px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--sp-3);
-  outline: none;
-  background: var(--bg);
-}
-.name-input:focus {
-  border-color: var(--ink);
 }
 .send-pill {
   flex: none;
