@@ -33,7 +33,7 @@ function ItemRow({ item }: { item: RunnerItemView }) {
       {item.assertions.length > 0 && (
         <ul style={{ listStyle: 'none', margin: 0, padding: '0 0 6px 26px' }}>
           {item.assertions.map((a, i) => {
-            const mark = statusIcon(a.pass ? 'passed' : 'failed')
+            const mark = statusIcon(a.skipped ? 'skipped' : a.pass ? 'passed' : 'failed')
             return (
               <li
                 key={`${a.name}-${i}`}
@@ -43,7 +43,7 @@ function ItemRow({ item }: { item: RunnerItemView }) {
                   name={mark.name}
                   size={14}
                   style={{ color: mark.color, verticalAlign: '-2px' }}
-                  label={a.pass ? '断言通过' : '断言失败'}
+                  label={a.skipped ? '断言跳过' : a.pass ? '断言通过' : '断言失败'}
                 />{' '}
                 {a.name}
                 {a.error ? ` — ${a.error}` : ''}

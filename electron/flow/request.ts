@@ -26,12 +26,18 @@ import {
 } from '../http/engine'
 import { CookieJar } from '../http/cookie-jar'
 import { resolveUa } from '../http/ua-presets'
-import { mapLookup, resolveVars, type VarLookup } from '../vars/resolver'
+import { dynamicVar } from '../postman/dynamic-vars'
+import { resolveVars, type VarLookup } from '../vars/resolver'
 import { preview, runAll } from '../vars/extractor'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import type { FileStore } from '../infra/filestore'
 import type { ScriptVM } from '../script/vm'
-import type { SubRequestCall, SubRequestResult } from '../script/protocol'
+import type {
+  ScriptScopes,
+  ScriptVarScope,
+  SubRequestCall,
+  SubRequestResult,
+} from '../script/protocol'
 
 /** 超过该字节数的响应体落文件，DB 只存路径（03 号文档 §5） */
 export const INLINE_BODY_LIMIT = 256 * 1024
@@ -51,10 +57,13 @@ export interface FlowDeps {
 
 interface ResolvedTarget {
   apiId: string | null
+  requestName: string
   projectId: string
   project: Project | null
   /** 集合链由外到内，用于认证/变量/脚本继承（23 号文档 §3.1） */
   collectionChain: Collection[]
+  /** 叶子集合，pm.collectionVariables 写回此处 */
+  collectionId: string | null
   environmentId: string | null
   method: Api['method']
   url: string
@@ -175,25 +184,48 @@ export class RequestFlow {
     this.jars.clear()
   }
 
-  /** 合并顺序即优先级：全局 → 项目根 → 集合链由外到内 → 环境 → runtime（23 号文档 §3.1） */
-  private mergedVars(target: ResolvedTarget): Map<string, string> {
+  /** 各作用域快照；pm.* 按作用域读写（23 号文档 §4.2） */
+  private scopeSnapshot(target: ResolvedTarget, local: Map<string, string>): ScriptScopes {
     const { repos } = this.deps
-    const merged = new Map<string, string>()
-    for (const v of repos.variable.listGlobals()) if (v.enabled) merged.set(v.key, v.value)
-    for (const v of target.project?.variables ?? []) if (v.enabled) merged.set(v.key, v.value)
-    for (const collection of target.collectionChain) {
-      for (const v of collection.variables) if (v.enabled) merged.set(v.key, v.value)
+    const globals: Record<string, string> = {}
+    for (const v of repos.variable.listGlobals()) if (v.enabled) globals[v.key] = v.value
+    const project: Record<string, string> = {}
+    for (const v of target.project?.variables ?? []) if (v.enabled) project[v.key] = v.value
+    const collection: Record<string, string> = {}
+    for (const c of target.collectionChain) {
+      // 前置脚本可能刚改写集合变量，读 DB 最新值而不是解析请求时的快照
+      const current = repos.collection.get(c.id) ?? c
+      for (const v of current.variables) if (v.enabled) collection[v.key] = v.value
     }
+    const environment: Record<string, string> = {}
     if (target.environmentId) {
       for (const v of repos.variable.listForEnv(target.environmentId))
-        if (v.enabled) merged.set(v.key, v.value)
+        if (v.enabled) environment[v.key] = v.value
+    }
+    return { globals, project, collection, environment, local: Object.fromEntries(local) }
+  }
+
+  /** 合并顺序即优先级：全局 → 项目根 → 集合链由外到内 → 环境 → runtime（23 号文档 §3.1） */
+  private mergedVars(target: ResolvedTarget, local?: Map<string, string>): Map<string, string> {
+    const merged = new Map<string, string>()
+    const scopes = this.scopeSnapshot(target, local ?? new Map())
+    for (const group of [
+      scopes.globals,
+      scopes.project,
+      scopes.collection,
+      scopes.environment,
+      scopes.local,
+    ]) {
+      for (const [k, v] of Object.entries(group)) merged.set(k, v)
     }
     for (const [k, v] of this.runtimeFor(target.projectId)) merged.set(k, v)
     return merged
   }
 
-  private varLookup(target: ResolvedTarget): VarLookup {
-    return mapLookup(this.mergedVars(target))
+  /** local 优先级最高；静态变量未命中时再取动态变量（23 号文档 §4.5） */
+  private varLookup(target: ResolvedTarget, local?: Map<string, string>): VarLookup {
+    const merged = this.mergedVars(target)
+    return { get: (name) => local?.get(name) ?? merged.get(name) ?? dynamicVar(name) }
   }
 
   /** 项目默认伪装 ← 接口覆盖（03 号文档 §3.8） */
@@ -216,9 +248,11 @@ export class RequestFlow {
       const project = projectId ? repos.project.get(projectId) : null
       return {
         apiId: api.id,
+        requestName: api.name,
         projectId,
         project,
         collectionChain: chain,
+        collectionId: api.collectionId,
         environmentId: pickEnv(projectId),
         method: api.method,
         url: api.url,
@@ -242,9 +276,11 @@ export class RequestFlow {
     const project = projectId ? repos.project.get(projectId) : null
     return {
       apiId: null,
+      requestName: '临时请求',
       projectId,
       project,
       collectionChain: chain,
+      collectionId: draft.collectionId ?? null,
       environmentId: pickEnv(projectId),
       method: draft.method,
       url: draft.url,
@@ -368,9 +404,11 @@ export class RequestFlow {
     const projectId = ctx.projectId
     const target: ResolvedTarget = {
       apiId: null,
+      requestName: 'pm.sendRequest',
       projectId,
       project: projectId ? this.deps.repos.project.get(projectId) : null,
       collectionChain: [],
+      collectionId: null,
       environmentId: projectId
         ? (this.deps.repos.environment.activeFor(projectId)?.id ?? null)
         : null,
@@ -393,7 +431,12 @@ export class RequestFlow {
       isSubRequest: true,
     }
 
-    const result = await this.runTarget(target, { ...ctx, depth: ctx.depth + 1 })
+    // 子请求各自使用独立取消句柄：pm.test 里的多个异步子请求会并发执行
+    const result = await this.runTarget(target, {
+      ...ctx,
+      depth: ctx.depth + 1,
+      cancelId: `${ctx.cancelId}#${ctx.subCount}`,
+    })
     return {
       status: result.response.status,
       statusText: result.response.statusText,
@@ -404,7 +447,7 @@ export class RequestFlow {
   }
 
   private async runTarget(target: ResolvedTarget, ctx: RunCtx): Promise<SendResult> {
-    const lookup = this.varLookup(target)
+    let lookup = this.varLookup(target)
     let fake = RequestFlow.mergeFake(target.project, target.fake)
     let url = this.buildUrl(target, lookup)
     let bodyText = resolveVars(target.body, lookup).text
@@ -412,6 +455,7 @@ export class RequestFlow {
     let bodyType = target.bodyType
     let workingRows = target.headers
     let workingAuth = target.auth
+    const localVars = new Map<string, string>()
     const preLogs: LogEntry[] = []
     const preAssertions: AssertionResult[] = []
 
@@ -429,13 +473,23 @@ export class RequestFlow {
               body: bodyText,
               bodyType,
             },
-            vars: Object.fromEntries(this.mergedVars(target)),
+            vars: Object.fromEntries(this.mergedVars(target, localVars)),
+            scopes: this.scopeSnapshot(target, localVars),
+            cookies: target.projectId ? this.jarFor(target.projectId).list(url) : [],
+            requestName: target.requestName,
+            requestId: target.apiId,
+            iteration: 1,
+            iterationCount: 1,
+            collectionId: target.collectionId,
             projectId: target.projectId,
             auth: workingAuth,
           },
           {
             subRequest: (call) => this.sendSub(call, ctx),
-            varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
+            varWrite: (scope, key, value, collectionId) =>
+              this.writeVar(scope, key, value, target, collectionId),
+            varUnset: (scope, key, collectionId) => this.unsetVar(scope, key, target, collectionId),
+            cookieWrite: (op, name, value) => this.writeCookie(op, name, value, target, url),
           },
         )
         preLogs.push(...outcome.logs)
@@ -443,6 +497,7 @@ export class RequestFlow {
         for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
           this.runtimeFor(target.projectId).set(k, v)
         }
+        for (const [k, v] of Object.entries(outcome.localWrites)) localVars.set(k, v)
         if (outcome.error) {
           throw new IpcErrorRaised({
             code: outcome.error.code,
@@ -483,7 +538,8 @@ export class RequestFlow {
       }
     }
 
-    // Header 在伪装补丁合并后再算一次，保证 toapi.fake.ua/header 真实落线
+    // Header 在伪装补丁与前置脚本之后重算，保证 local 变量与 toapi.fake 真实落线
+    lookup = this.varLookup(target, localVars)
     const headers = this.buildHeaders(
       { ...target, headers: workingRows, auth: workingAuth },
       lookup,
@@ -568,6 +624,7 @@ export class RequestFlow {
     const postLogs: LogEntry[] = []
     const assertions: AssertionResult[] = []
 
+    const cookieUrl = res.finalUrl || url
     if (this.deps.script) {
       for (const code of target.postScripts) {
         const outcome = await this.deps.script.run(
@@ -589,13 +646,23 @@ export class RequestFlow {
               body: inline ? responseBody : responseBody.slice(0, INLINE_BODY_LIMIT),
               timeMs: res.timeMs,
             },
-            vars: Object.fromEntries(this.mergedVars(target)),
+            vars: Object.fromEntries(this.mergedVars(target, localVars)),
+            scopes: this.scopeSnapshot(target, localVars),
+            cookies: target.projectId ? this.jarFor(target.projectId).list(cookieUrl) : [],
+            requestName: target.requestName,
+            requestId: target.apiId,
+            iteration: 1,
+            iterationCount: 1,
+            collectionId: target.collectionId,
             projectId: target.projectId,
             auth: workingAuth,
           },
           {
             subRequest: (call) => this.sendSub(call, ctx),
-            varWrite: (scope, key, value) => this.writeVar(scope, key, value, target),
+            varWrite: (scope, key, value, collectionId) =>
+              this.writeVar(scope, key, value, target, collectionId),
+            varUnset: (scope, key, collectionId) => this.unsetVar(scope, key, target, collectionId),
+            cookieWrite: (op, name, value) => this.writeCookie(op, name, value, target, cookieUrl),
           },
         )
         postLogs.push(...outcome.logs)
@@ -603,6 +670,7 @@ export class RequestFlow {
         for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
           this.runtimeFor(target.projectId).set(k, v)
         }
+        for (const [k, v] of Object.entries(outcome.localWrites)) localVars.set(k, v)
         // 后置脚本自身出错不推翻已收到的响应，以失败断言呈现；后续脚本继续执行（05 号文档 §6）
         if (outcome.error)
           assertions.push({ name: '后置脚本执行', pass: false, error: outcome.error.message })
@@ -620,22 +688,76 @@ export class RequestFlow {
   }
 
   private writeVar(
-    scope: 'env' | 'global',
+    scope: ScriptVarScope,
     key: string,
     value: string,
     target: ResolvedTarget,
+    collectionId?: string,
   ): void {
     if (scope === 'global') {
       this.deps.repos.variable.upsert({ scope: 'global', key, value })
       return
     }
-    if (!target.environmentId) throw new Error('当前没有激活环境，无法写入环境变量')
-    this.deps.repos.variable.upsert({
-      scope: 'environment',
-      environmentId: target.environmentId,
-      key,
-      value,
-    })
+    if (scope === 'env') {
+      if (!target.environmentId) throw new Error('当前没有激活环境，无法写入环境变量')
+      this.deps.repos.variable.upsert({
+        scope: 'environment',
+        environmentId: target.environmentId,
+        key,
+        value,
+      })
+      return
+    }
+
+    const id = collectionId ?? target.collectionId
+    if (!id) throw new Error('当前请求不在集合内，无法写入集合变量')
+    const current = this.deps.repos.collection.get(id)
+    if (!current) throw new Error('集合不存在，无法写入集合变量')
+    const variables = current.variables.slice()
+    const at = variables.findIndex((v) => v.key === key)
+    if (at >= 0) variables[at] = { ...(variables[at] as (typeof variables)[number]), value }
+    else variables.push({ key, value, enabled: true, secret: false, desc: '' })
+    this.deps.repos.collection.update(id, { variables })
+  }
+
+  private unsetVar(
+    scope: ScriptVarScope,
+    key: string,
+    target: ResolvedTarget,
+    collectionId?: string,
+  ): void {
+    if (scope === 'global' || scope === 'env') {
+      const environmentId = scope === 'env' ? target.environmentId : null
+      if (scope === 'env' && !environmentId) throw new Error('当前没有激活环境，无法删除环境变量')
+      const row = this.deps.repos.variable.find(
+        scope === 'env' ? 'environment' : 'global',
+        environmentId,
+        key,
+      )
+      if (row) this.deps.repos.variable.remove(row.id)
+      return
+    }
+
+    const id = collectionId ?? target.collectionId
+    if (!id) throw new Error('当前请求不在集合内，无法写入集合变量')
+    const current = this.deps.repos.collection.get(id)
+    if (!current) return
+    const variables = current.variables.filter((v) => v.key !== key)
+    if (variables.length !== current.variables.length)
+      this.deps.repos.collection.update(id, { variables })
+  }
+
+  private writeCookie(
+    op: 'set' | 'unset',
+    name: string,
+    value: string | undefined,
+    target: ResolvedTarget,
+    url: string,
+  ): void {
+    if (!target.projectId || !/^https?:\/\//i.test(url)) return
+    const jar = this.jarFor(target.projectId)
+    if (op === 'set') jar.set(name, value ?? '', url)
+    else jar.unset(name, url)
   }
 
   private applyExtractors(

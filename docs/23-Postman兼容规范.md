@@ -145,7 +145,7 @@ project.pre_script → collection 链由外到内 pre_script → api.pre_script
 
 | 分组 | 成员 | 状态 | 说明 |
 |---|---|---|---|
-| 断言 | `pm.test(name, fn)` | ✅ B1 | 支持同步；返回 Promise 的用例会被 await 后再汇总 |
+| 断言 | `pm.test(name, fn)` | ✅ B1 | 同步 / 返回 Promise / `done` 回调三种写法；异步用例收尾前统一收敛再汇总 |
 | 断言 | `pm.test.skip(name)`、`pm.test.index` | ✅ B1 | 跳过用例计入 `skipped`，不判失败 |
 | 断言 | `pm.expect(value)` | ✅ B1 | 链式 chai 子集，见 §4.3 |
 | 响应 | `pm.response.code / status / responseTime / headers` | ✅ B1 | `headers.get/has/toObject` |
@@ -181,9 +181,12 @@ B1 必须通过：`to.equal / eql / deep.equal`、`to.be.true / false / null / u
 | `uuid` | v4 / v7 | B1 |
 | `moment` | 2.x 只读时间格式化 | B1 |
 | `atob` / `btoa` | 全局函数 | B1 |
+| `URL` / `URLSearchParams` / `TextEncoder` / `TextDecoder` | 宿主 Web 标准对象 | B1 |
+| `setTimeout` / `setInterval`（含 clear） | 宿主定时器，受脚本 5s 总时限约束 | B1 |
+| `console.log/info/debug/warn/error` | 转发到脚本日志面板 | B1 |
 | `xml2js`、`cheerio`、`tv4`（JSON Schema） | 按需体积评估后内置 | B4 |
 
-> 所有库在 worker 启动时注入 vm 上下文，不暴露 `require`；脚本无法触达文件系统与进程。
+> 所有库在 worker 启动时注入 vm 上下文，不暴露 `require`；脚本无法触达文件系统与进程。`fetch` / `XMLHttpRequest` 不存在，网络只能走 `pm.sendRequest`。
 
 ### 4.5 动态变量
 
@@ -204,7 +207,7 @@ B1 必须通过：`to.equal / eql / deep.equal`、`to.be.true / false / null / u
 
 - 完整键名清单由 `electron/postman/dynamic-vars.ts` 维护，并以单测锁定；新增键必须同时补文档表格与测试。
 - 同一次发送内每个 `{{$...}}` 占位符**独立求值**；需要同值复用请先写入变量（`pm.variables.set`）。
-- 未知 `{{$name}}` 保持原样并记 warning，不静默替换为空。
+- 未知 `{{$name}}` 保持原样并进入未解析变量清单，不静默替换为空。
 
 ## 5. B2：数据驱动 Runner 与 CLI
 

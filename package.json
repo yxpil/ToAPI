@@ -31,15 +31,21 @@
     "dist:nsis": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
+    "crypto-js": "^4.2.0",
     "jsonpath-plus": "^11.2.1",
+    "lodash": "^4.18.1",
+    "moment": "^2.31.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "undici": "^8.12.3",
+    "uuid": "^14.0.3",
     "zod": "^4.6.7",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/crypto-js": "^4.2.2",
+    "@types/lodash": "^4.17.27",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

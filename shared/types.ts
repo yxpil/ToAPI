@@ -189,6 +189,8 @@ export interface LogEntry {
 export interface AssertionResult {
   name: string
   pass: boolean
+  /** pm.test.skip 标记：不判失败，UI 显示为跳过 */
+  skipped?: boolean
   error?: string
 }
 

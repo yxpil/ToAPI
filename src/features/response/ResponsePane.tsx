@@ -130,10 +130,16 @@ export function ResponsePane() {
               {response.script.assertions.map((a, i) => (
                 <li key={`${a.name}-${i}`}>
                   <Icon
-                    name={a.pass ? 'check' : 'cross'}
+                    name={a.skipped ? 'minus' : a.pass ? 'check' : 'cross'}
                     size={14}
-                    style={{ color: a.pass ? 'var(--ok)' : 'var(--err)' }}
-                    label={a.pass ? '断言通过' : '断言失败'}
+                    style={{
+                      color: a.skipped
+                        ? 'var(--ink-tertiary)'
+                        : a.pass
+                          ? 'var(--ok)'
+                          : 'var(--err)',
+                    }}
+                    label={a.skipped ? '断言跳过' : a.pass ? '断言通过' : '断言失败'}
                   />
                   <span>{a.name}</span>
                   {a.error && <span className="assertion-error">— {a.error}</span>}

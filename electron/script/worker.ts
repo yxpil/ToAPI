@@ -1,7 +1,23 @@
 import { parentPort } from 'node:worker_threads'
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
 import vm from 'node:vm'
-import type { HostToWorker, SubRequestCall, SubRequestResult, WorkerToHost } from './protocol'
+import lodash from 'lodash'
+import CryptoJS from 'crypto-js'
+import moment from 'moment'
+import { v4 as uuidv4, v7 as uuidv7 } from 'uuid'
+import type { FakeConfig } from '@shared/types'
+import { dynamicVar } from '../postman/dynamic-vars'
+import { expect } from './expect'
+import { buildPm, type PmTestResult } from './pm'
+import type {
+  HostToWorker,
+  ScriptJob,
+  ScriptRequest,
+  ScriptVarScope,
+  SubRequestCall,
+  SubRequestResult,
+  WorkerToHost,
+} from './protocol'
 
 const port = parentPort
 if (!port) throw new Error('script worker 必须由 worker_threads 启动')
@@ -24,52 +40,6 @@ const stringify = (value: unknown): string => {
   }
 }
 
-const deepEqual = (a: unknown, b: unknown): boolean => {
-  const sa = stringify(a)
-  const sb = stringify(b)
-  if (sa === sb) return true
-  const bufA = Buffer.from(sa)
-  const bufB = Buffer.from(sb)
-  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB)
-}
-
-const makeExpect = (actual: unknown) => ({
-  toBe: (expected: unknown): void => {
-    if (actual !== expected)
-      throw new AssertionError(`期望 ${stringify(expected)}，实际 ${stringify(actual)}`)
-  },
-  toEqual: (expected: unknown): void => {
-    if (!deepEqual(actual, expected)) {
-      throw new AssertionError(`值不相等：期望 ${stringify(expected)}，实际 ${stringify(actual)}`)
-    }
-  },
-  toContain: (needle: string): void => {
-    const text = typeof actual === 'string' ? actual : stringify(actual)
-    if (!text.includes(needle)) throw new AssertionError(`${text.slice(0, 120)} 不包含 ${needle}`)
-  },
-  toMatch: (pattern: string): void => {
-    const text = typeof actual === 'string' ? actual : stringify(actual)
-    if (!new RegExp(pattern).test(text))
-      throw new AssertionError(`${text.slice(0, 120)} 不匹配 /${pattern}/`)
-  },
-  toBeLessThan: (limit: number): void => {
-    if (!(typeof actual === 'number' && actual < limit)) {
-      throw new AssertionError(`${stringify(actual)} 不小于 ${limit}`)
-    }
-  },
-  toBeGreaterThan: (limit: number): void => {
-    if (!(typeof actual === 'number' && actual > limit)) {
-      throw new AssertionError(`${stringify(actual)} 不大于 ${limit}`)
-    }
-  },
-  toBeDefined: (): void => {
-    if (actual === undefined) throw new AssertionError('值未定义')
-  },
-  toBeNull: (): void => {
-    if (actual !== null) throw new AssertionError(`期望 null，实际 ${stringify(actual)}`)
-  },
-})
-
 let seq = 0
 const waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 
@@ -83,8 +53,18 @@ const ask = <T>(build: (id: number) => WorkerToHost): Promise<T> =>
 const subRequest = (call: SubRequestCall): Promise<SubRequestResult> =>
   ask<SubRequestResult>((id) => ({ type: 'subRequest', id, call }))
 
-const varWrite = (scope: 'env' | 'global', key: string, value: string): Promise<void> =>
-  ask<void>((id) => ({ type: 'varWrite', id, scope, key, value }))
+const varWrite = (
+  scope: ScriptVarScope,
+  key: string,
+  value: string,
+  collectionId?: string,
+): Promise<void> => ask<void>((id) => ({ type: 'varWrite', id, scope, key, value, collectionId }))
+
+const varUnset = (scope: ScriptVarScope, key: string, collectionId?: string): Promise<void> =>
+  ask<void>((id) => ({ type: 'varUnset', id, scope, key, collectionId }))
+
+const cookieWrite = (op: 'set' | 'unset', name: string, value?: string): Promise<void> =>
+  ask<void>((id) => ({ type: 'cookieWrite', id, op, name, value }))
 
 port.on('message', (msg: HostToWorker) => {
   if (msg.type === 'subResponse') {
@@ -99,33 +79,31 @@ port.on('message', (msg: HostToWorker) => {
     const w = waiting.get(msg.id)
     if (!w) return
     waiting.delete(msg.id)
-    w.resolve(undefined)
+    if (msg.ok === false) w.reject(new Error(msg.error ?? '变量写入失败'))
+    else w.resolve(undefined)
   }
 })
 
-const buildToapi = (
-  job: Extract<HostToWorker, { type: 'job' }>['job'],
-  state: {
-    request: {
-      method: string
-      url: string
-      headers: Record<string, string>
-      body: string
-      bodyType: string
-    }
-    runtime: Map<string, string>
-    fake: Record<string, unknown>
-    assertions: { name: string; pass: boolean; error?: string }[]
-    skip?: string
-  },
-): Record<string, unknown> => {
+interface WorkerState {
+  request: ScriptRequest
+  runtime: Map<string, string>
+  local: Map<string, string>
+  fake: Record<string, unknown>
+  assertions: PmTestResult[]
+  pending: Promise<void>[]
+  writes: Promise<void>[]
+  errors: string[]
+  skip?: string
+}
+
+const buildToapi = (job: ScriptJob, state: WorkerState): Record<string, unknown> => {
   const toapi: Record<string, unknown> = {}
 
   const request = Object.create(null) as Record<string, unknown>
   Object.defineProperty(request, 'method', {
     get: () => state.request.method,
     set: (v: string) => {
-      state.request.method = v
+      state.request.method = v as ScriptRequest['method']
     },
   })
   Object.defineProperty(request, 'url', {
@@ -165,21 +143,23 @@ const buildToapi = (
     toapi.response = res
   }
 
+  const getVar = (key: string): string | undefined =>
+    state.local.get(key) ?? state.runtime.get(key) ?? job.vars[key] ?? dynamicVar(key)
+
   toapi.vars = {
-    get: (key: string): string | undefined => state.runtime.get(key) ?? job.vars[key],
+    get: getVar,
     set: (key: string, value: string): void => {
       state.runtime.set(key, String(value))
     },
   }
-  const write =
-    (scope: 'env' | 'global') =>
+  const writeScope =
+    (scope: ScriptVarScope) =>
     (key: string, value: string): Promise<void> =>
-      varWrite(scope, key, String(value))
-  toapi.env = { set: write('env'), get: (key: string) => state.runtime.get(key) ?? job.vars[key] }
-  toapi.globals = {
-    set: write('global'),
-    get: (key: string) => state.runtime.get(key) ?? job.vars[key],
-  }
+      varWrite(scope, key, String(value)).catch((e: unknown) => {
+        state.errors.push((e as Error).message)
+      })
+  toapi.env = { set: writeScope('env'), get: getVar }
+  toapi.globals = { set: writeScope('global'), get: getVar }
 
   toapi.fake = {
     ua: (value: string): void => {
@@ -206,14 +186,14 @@ const buildToapi = (
     try {
       const out = fn()
       if (out && typeof (out as Promise<unknown>).then === 'function') {
-        throw new AssertionError('toapi.test 不支持异步断言，请改用 toapi.asyncTest')
+        throw new AssertionError('toapi.test 不支持异步断言，请改用 pm.test')
       }
       state.assertions.push({ name, pass: true })
     } catch (e) {
       state.assertions.push({ name, pass: false, error: (e as Error).message })
     }
   }
-  toapi.expect = makeExpect
+  toapi.expect = expect
 
   toapi.log = (...args: unknown[]): void =>
     post({ type: 'log', level: 'log', text: args.map(stringify).join(' ') })
@@ -238,19 +218,79 @@ const buildToapi = (
   return toapi
 }
 
+const settle = async (state: WorkerState): Promise<void> => {
+  while (state.pending.length > 0 || state.writes.length > 0) {
+    const pending = state.pending.splice(0)
+    const writes = state.writes.splice(0)
+    await Promise.all([...pending, ...writes])
+  }
+}
+
 const WARMUP = `(async () => {\n`
 const CLOSING = `\n})()`
 
-async function run(job: Extract<HostToWorker, { type: 'job' }>['job']): Promise<void> {
-  const state = {
+async function run(job: ScriptJob): Promise<void> {
+  const state: WorkerState = {
     request: { ...job.request, headers: { ...job.request.headers } },
     runtime: new Map<string, string>(),
-    fake: {} as Record<string, unknown>,
-    assertions: [] as { name: string; pass: boolean; error?: string }[],
-    skip: undefined as string | undefined,
+    local: new Map<string, string>(Object.entries(job.scopes.local)),
+    fake: {},
+    assertions: [],
+    pending: [],
+    writes: [],
+    errors: [],
+    skip: undefined,
   }
 
-  const sandbox = { toapi: buildToapi(job, state) }
+  const pm = buildPm({
+    job,
+    request: state.request,
+    local: state.local,
+    assertions: state.assertions,
+    pending: state.pending,
+    writes: state.writes,
+    errors: state.errors,
+    skip: (reason?: string) => {
+      state.skip = reason ?? 'skipped by script'
+    },
+    subRequest,
+    varWrite,
+    varUnset,
+    cookieWrite,
+    log: (level, text) => post({ type: 'log', level, text }),
+  })
+
+  // 沙箱库在启动时注入（23 号文档 §4.4），不暴露 require / process / 文件系统
+  const sandbox = {
+    toapi: buildToapi(job, state),
+    pm,
+    _: lodash,
+    CryptoJS,
+    uuid: { v4: uuidv4, v7: uuidv7 },
+    moment,
+    atob: (input: string): string => Buffer.from(String(input), 'base64').toString('latin1'),
+    btoa: (input: string): string => Buffer.from(String(input), 'latin1').toString('base64'),
+    URL,
+    URLSearchParams,
+    TextEncoder,
+    TextDecoder,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    console: {
+      log: (...args: unknown[]) =>
+        post({ type: 'log', level: 'log', text: args.map(stringify).join(' ') }),
+      info: (...args: unknown[]) =>
+        post({ type: 'log', level: 'log', text: args.map(stringify).join(' ') }),
+      debug: (...args: unknown[]) =>
+        post({ type: 'log', level: 'log', text: args.map(stringify).join(' ') }),
+      warn: (...args: unknown[]) =>
+        post({ type: 'log', level: 'warn', text: args.map(stringify).join(' ') }),
+      error: (...args: unknown[]) =>
+        post({ type: 'log', level: 'error', text: args.map(stringify).join(' ') }),
+    },
+  }
   const context = vm.createContext(sandbox, { codeGeneration: { strings: false, wasm: false } })
 
   let script: vm.Script
@@ -264,17 +304,23 @@ async function run(job: Extract<HostToWorker, { type: 'job' }>['job']): Promise<
   try {
     // timeout 只覆盖同步阶段；异步阶段的失控由宿主 terminate 兜底（05 号文档 §6）
     await script.runInContext(context, { timeout: Math.min(job.timeoutMs, 5_000) })
+    await settle(state)
   } catch (e) {
     post({ type: 'fail', message: (e as Error).message })
     return
   }
 
+  for (const error of state.errors) {
+    state.assertions.push({ name: '脚本变量写入', pass: false, error })
+  }
+
   post({
     type: 'done',
-    request: state.request as never,
-    fake: state.fake,
+    request: state.request,
+    fake: state.fake as FakeConfig,
     skip: state.skip,
     runtimeWrites: Object.fromEntries(state.runtime),
+    localWrites: Object.fromEntries(state.local),
     assertions: state.assertions,
   })
 }

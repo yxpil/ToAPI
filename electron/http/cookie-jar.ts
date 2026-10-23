@@ -105,19 +105,56 @@ export class CookieJar {
   }
 
   headerFor(requestUrl: string): string | undefined {
+    const records = this.list(requestUrl)
+    return records.length > 0 ? records.map((c) => `${c.name}=${c.value}`).join('; ') : undefined
+  }
+
+  /** pm.cookies 的只读视图：同域同路径下按名称去重，具体路径优先 */
+  list(requestUrl: string): { name: string; value: string }[] {
     const host = hostOf(requestUrl)
-    if (!host) return undefined
+    if (!host) return []
     const now = Date.now()
-    const parts: string[] = []
+    const byName = new Map<string, CookieRecord>()
     for (const [domain, records] of this.store) {
       if (!domainMatch(domain, host)) continue
       for (const record of records) {
         if (record.expiresAt !== null && record.expiresAt < now) continue
         if (!pathMatch(record.path, pathOf(requestUrl))) continue
-        parts.push(`${record.name}=${record.value}`)
+        const existing = byName.get(record.name)
+        if (!existing || record.path.length > existing.path.length) byName.set(record.name, record)
       }
     }
-    return parts.length > 0 ? parts.join('; ') : undefined
+    return [...byName.values()].map((c) => ({ name: c.name, value: c.value }))
+  }
+
+  /** pm.cookies.set：为当前 URL 的域写一个会话 Cookie */
+  set(name: string, value: string, requestUrl: string): void {
+    const host = hostOf(requestUrl)
+    if (!host || !name) return
+    const bucket = this.bucket(host)
+    const record: CookieRecord = {
+      name,
+      value,
+      domain: host,
+      path: pathOf(requestUrl),
+      expiresAt: null,
+      httpOnly: false,
+    }
+    const at = bucket.findIndex((c) => c.name === name && c.path === record.path)
+    if (at >= 0) bucket[at] = record
+    else bucket.push(record)
+  }
+
+  /** pm.cookies.unset：删除当前 URL 域下同名 Cookie */
+  unset(name: string, requestUrl: string): void {
+    const host = hostOf(requestUrl)
+    if (!host) return
+    for (const [domain, records] of this.store) {
+      if (!domainMatch(domain, host)) continue
+      const kept = records.filter((c) => c.name !== name)
+      if (kept.length === 0) this.store.delete(domain)
+      else this.store.set(domain, kept)
+    }
   }
 
   clear(): void {

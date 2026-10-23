@@ -410,7 +410,7 @@ try {
   await app.waitFor(`!!document.querySelector('[aria-label="后置脚本"]')`, '脚本编辑区出现')
   await app.js(`window.__h.set(
     document.querySelector('[aria-label="后置脚本"]'),
-    "toapi.test('状态 200', () => toapi.expect(toapi.response.status).toBe(200))\\ntoapi.test('回显 method', () => toapi.expect(toapi.response.json().method).toBe('GET'))"
+    "toapi.test('状态 200', () => toapi.expect(toapi.response.status).toBe(200))\\ntoapi.test('回显 method', () => toapi.expect(toapi.response.json().method).toBe('GET'))\\npm.test.skip('跳过示例')"
   )`)
   await app.js(`window.__h.click('保存 (Ctrl+S)')`)
   await app.waitFor(
@@ -425,6 +425,14 @@ try {
   )
   report.assertionsRendered = await app.js(
     `document.querySelectorAll('[aria-label="断言通过"]').length`,
+  )
+  await app.waitFor(
+    `document.querySelectorAll('[aria-label="断言跳过"]').length === 1`,
+    '跳过断言以 dash 标记展示',
+    10000,
+  )
+  report.skippedAssertions = await app.js(
+    `document.querySelectorAll('[aria-label="断言跳过"]').length`,
   )
 
   // ── 集合 Runner：先切到 Runner 面板（订阅进度事件），再点集合行的「运行集合」 ──
@@ -447,6 +455,14 @@ try {
   report.runnerItems = await app.js(`document.querySelectorAll('.pane-body .history-row').length`)
   report.runnerAssertionIcons = await app.js(
     `document.querySelectorAll('.pane-body [aria-label="断言通过"]').length`,
+  )
+  await app.waitFor(
+    `document.querySelectorAll('.pane-body [aria-label="断言跳过"]').length > 0`,
+    'Runner 跳过断言以 dash 标记展示',
+    10000,
+  )
+  report.runnerSkippedIcons = await app.js(
+    `document.querySelectorAll('.pane-body [aria-label="断言跳过"]').length`,
   )
 
   // ── 右键菜单 / 危险操作确认（06 号文档 §3.4、§5）──

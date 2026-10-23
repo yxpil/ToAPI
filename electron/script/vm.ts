@@ -4,6 +4,7 @@ import type {
   HostToWorker,
   ScriptJob,
   ScriptRequest,
+  ScriptVarScope,
   SubRequestCall,
   SubRequestResult,
   WorkerToHost,
@@ -17,13 +18,17 @@ export interface ScriptOutcome {
   logs: LogEntry[]
   /** 脚本内 toapi.vars.set 的运行时变量 */
   runtimeWrites: Record<string, string>
+  /** 脚本内 pm.variables.set 的请求级 local 变量 */
+  localWrites: Record<string, string>
   skip?: string
   error?: { code: 'SCRIPT_ERROR' | 'SCRIPT_TIMEOUT'; message: string }
 }
 
 export interface RunHooks {
   subRequest: (call: SubRequestCall) => Promise<SubRequestResult>
-  varWrite: (scope: 'env' | 'global', key: string, value: string) => void
+  varWrite: (scope: ScriptVarScope, key: string, value: string, collectionId?: string) => void
+  varUnset: (scope: ScriptVarScope, key: string, collectionId?: string) => void
+  cookieWrite: (op: 'set' | 'unset', name: string, value?: string) => void
 }
 
 export interface ScriptVMOpts {
@@ -32,7 +37,13 @@ export interface ScriptVMOpts {
   memoryLimitMb?: number
 }
 
-const EMPTY: ScriptOutcome = { fakePatch: {}, assertions: [], logs: [], runtimeWrites: {} }
+const EMPTY: ScriptOutcome = {
+  fakePatch: {},
+  assertions: [],
+  logs: [],
+  runtimeWrites: {},
+  localWrites: {},
+}
 
 /**
  * 沙箱宿主：用户代码跑在独立 worker 线程内的 vm 上下文中。
@@ -102,15 +113,33 @@ export class ScriptVM {
               )
             return
           case 'varWrite':
+          case 'varUnset':
             try {
-              hooks.varWrite(msg.scope, msg.key, msg.value)
+              if (msg.type === 'varWrite')
+                hooks.varWrite(msg.scope, msg.key, msg.value, msg.collectionId)
+              else hooks.varUnset(msg.scope, msg.key, msg.collectionId)
               worker.postMessage({ type: 'varWriteAck', id: msg.id } satisfies HostToWorker)
             } catch (e) {
-              finish({
-                ...EMPTY,
-                logs,
-                error: { code: 'SCRIPT_ERROR', message: (e as Error).message },
-              })
+              // 写作用域失败回传为脚本错误，由 pm 侧记成失败断言，不终止整个脚本
+              worker.postMessage({
+                type: 'varWriteAck',
+                id: msg.id,
+                ok: false,
+                error: (e as Error).message,
+              } satisfies HostToWorker)
+            }
+            return
+          case 'cookieWrite':
+            try {
+              hooks.cookieWrite(msg.op, msg.name, msg.value)
+              worker.postMessage({ type: 'varWriteAck', id: msg.id } satisfies HostToWorker)
+            } catch (e) {
+              worker.postMessage({
+                type: 'varWriteAck',
+                id: msg.id,
+                ok: false,
+                error: (e as Error).message,
+              } satisfies HostToWorker)
             }
             return
           case 'done':
@@ -120,6 +149,7 @@ export class ScriptVM {
               assertions: msg.assertions,
               logs,
               runtimeWrites: msg.runtimeWrites ?? {},
+              localWrites: msg.localWrites ?? {},
               skip: msg.skip,
             })
             return
