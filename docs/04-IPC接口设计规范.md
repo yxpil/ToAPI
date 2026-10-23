@@ -57,6 +57,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `api:cancel` | `{cancelId}` | `{}` |
 
 > `api:send` 支持两种模式：传 `apiId` 发已保存接口；传 `draft` 发未保存的临时请求（如 cURL 导入预览）。
+> `api:update` 的 `url` 允许为空串：新建接口先存草稿、后补 URL 是正常路径；发送时由 `buildUrl` 返回 `VALIDATION`（`URL 必须以 http:// 或 https:// 开头`）。`draft.url` 仍要求非空。
 
 ### 3.3 变量与环境
 | Channel | 入参 | 返回 |
@@ -91,7 +92,14 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-rules` / `notify:set-rules` / `notify:test-webhook` / `event:notify` | 见 15 号文档 §6 | |
 | `ai:get-config` / `ai:set-config` / `ai:test-connection` / `ai:gen-api` / `ai:gen-script` / `ai:gen-schema` / `ai:explain-failure` / `ai:explain-load` / `ai:interpret-md` / `ai:adopt` / `ai:call-log` | 见 16 号文档 §5 | |
 
-### 3.6 事件（主进程 → 渲染进程）
+### 3.6 应用与握手
+| Channel | 入参 | 返回 |
+|---|---|---|
+| `app:hello` | `{}` | `{mainVersion, schemaVersion, channelsHash, platform, dbSizeBytes}` |
+
+`dbSizeBytes` 为主库文件当前字节数（内存库为 0），底栏 DB 大小每次握手/刷新时读取；`platform` 供兼容性提示与 14 号文档的多平台文案。
+
+### 3.7 事件（主进程 → 渲染进程）
 | Channel | 载荷 | 时机 |
 |---|---|---|
 | `event:send-progress` | `{cancelId, phase:'script'\|'sending'\|'receiving'}` | 请求进行中 |

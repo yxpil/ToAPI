@@ -3,6 +3,8 @@ import type { Api, Auth, Extractor, FakeConfig, HttpMethod } from '@shared/types
 import { HTTP_METHODS } from '@shared/types'
 import { useApp } from '../../stores/app.store'
 import { Icon } from '../../components/Icon'
+import { EmptyState } from '../../components/EmptyState'
+import { Spinner } from '../../components/Spinner'
 import { KvTable } from './KvTable'
 
 type Tab = 'params' | 'headers' | 'auth' | 'fake' | 'body' | 'extractors' | 'scripts'
@@ -32,20 +34,24 @@ const UA_PRESETS = [
 ]
 
 export function EditorPane() {
-  const { api, patchApi, send, saveApi, sendPending, savePending } = useApp()
+  const { api, patchApi, send, saveApi, sendPending, savePending, createApi } = useApp()
   const [tab, setTab] = useState<Tab>('params')
 
   if (!api) {
     return (
-      <div className="workspace">
-        <div className="empty">
-          左侧选择接口，或点「+ 接口」新建
-          <div style={{ marginTop: 12 }}>
-            <span className="pill ghost" title="快捷键 Ctrl+Enter 发送">
-              Ctrl+Enter 发送 · Ctrl+S 保存
-            </span>
-          </div>
-        </div>
+      <div className="workspace" data-testid="editor">
+        <EmptyState
+          text="左侧选择接口，或新建一个开始调试"
+          action={
+            <button
+              className="pill ghost"
+              title="新建接口"
+              onClick={() => void createApi('新接口')}
+            >
+              <Icon name="plus" size={14} /> 新建接口
+            </button>
+          }
+        />
       </div>
     )
   }
@@ -58,22 +64,24 @@ export function EditorPane() {
     patchApi({ extractors: api.extractors.map((e, i) => (i === index ? { ...e, ...next } : e)) })
 
   return (
-    <div className="workspace">
+    <div className="workspace" data-testid="editor">
       <div className="title-row">
         <input
           className="name-input"
           value={api.name}
           aria-label="接口名称"
           placeholder="接口名称"
+          data-testid="api-name"
           onChange={(e) => patchApi({ name: e.target.value })}
         />
         <button
           className="pill"
           title="保存 (Ctrl+S)"
+          data-testid="save"
           onClick={() => void saveApi()}
           disabled={savePending}
         >
-          {savePending ? <span className="spinner" /> : <Icon name="check" size={14} />} 保存
+          {savePending ? <Spinner label="保存中" /> : <Icon name="check" size={14} />} 保存
         </button>
       </div>
       <div className="url-bar">
@@ -83,6 +91,7 @@ export function EditorPane() {
             value={api.method}
             aria-label="请求方法"
             title="请求方法"
+            data-testid="method"
             onChange={(e) => patchApi({ method: e.target.value as HttpMethod })}
           >
             {HTTP_METHODS.map((m) => (
@@ -96,21 +105,23 @@ export function EditorPane() {
             value={api.url}
             placeholder="https://api.example.com/users?{{query}}"
             aria-label="请求 URL"
+            data-testid="url-input"
             spellCheck={false}
             onChange={(e) => patchApi({ url: e.target.value })}
           />
           <button
             className="send-pill"
             title="发送 (Ctrl+Enter)"
+            data-testid="send"
             onClick={() => void send()}
             disabled={sendPending}
           >
-            {sendPending ? <span className="spinner" /> : <Icon name="send" size={14} />} 发送
+            {sendPending ? <Spinner label="发送中" /> : <Icon name="send" size={14} />} 发送
           </button>
         </div>
       </div>
 
-      <div style={{ padding: '0 var(--sp-3) var(--sp-2)' }}>
+      <div className="tab-row">
         <div className="segmented" role="tablist" aria-label="请求编辑分区">
           {TABS.map((t) => (
             <button
@@ -118,6 +129,7 @@ export function EditorPane() {
               role="tab"
               aria-selected={tab === t.id}
               title={t.label}
+              data-testid={`tab-${t.id}`}
               onClick={() => setTab(t.id)}
             >
               {t.label}

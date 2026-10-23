@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { MoveTarget } from '@shared/channels'
 import type {
   Api,
   Environment,
@@ -24,6 +25,8 @@ interface AppState {
   response: SendResult | null
   responseError: IpcError | null
   history: HistorySummary[]
+  historyNextCursor: string | null
+  historyLoading: boolean
   envs: Environment[]
   vars: Variable[]
   sendPending: boolean
@@ -37,8 +40,12 @@ interface AppState {
   selectApi(id: string): Promise<void>
   createProject(name: string): Promise<void>
   createCollection(name: string): Promise<void>
-  createApi(name: string): Promise<void>
+  createApi(name: string, collectionId?: string): Promise<void>
   removeApi(id: string): Promise<void>
+  removeProject(id: string): Promise<void>
+  removeCollection(id: string): Promise<void>
+  duplicateApi(id: string): Promise<void>
+  moveNode(target: MoveTarget): Promise<void>
   patchApi(patch: Partial<Api>): void
   saveApi(): Promise<void>
   send(): Promise<void>
@@ -46,6 +53,7 @@ interface AppState {
   activateEnv(environmentId: string | null): Promise<void>
   setVar(key: string, value: string, environmentId: string | null): Promise<void>
   refreshHistory(): Promise<void>
+  loadMoreHistory(): Promise<void>
   dismissToast(): void
 }
 
@@ -105,6 +113,8 @@ export const useApp = create<AppState>((set, get) => {
     response: null,
     responseError: null,
     history: [],
+    historyNextCursor: null,
+    historyLoading: false,
     envs: [],
     vars: [],
     sendPending: false,
@@ -156,22 +166,72 @@ export const useApp = create<AppState>((set, get) => {
       await get().refreshTree()
     },
 
-    async createApi(name) {
+    async createApi(name, collectionId) {
       const { tree, activeProjectId } = get()
-      const collectionId = firstCollectionOf(tree, activeProjectId)
-      if (!collectionId) {
+      const target = collectionId ?? firstCollectionOf(tree, activeProjectId)
+      if (!target) {
         set({ toast: { kind: 'error', text: '请先创建集合' } })
         return
       }
-      const api = await call(invoke('api:create', { collectionId, name, ...FALLBACK_API }))
+      const api = await call(invoke('api:create', { collectionId: target, name, ...FALLBACK_API }))
       if (!api) return
       await get().refreshTree()
       await get().selectApi(api.id)
     },
 
     async removeApi(id) {
-      await call(invoke('api:delete', { id }))
+      let ok = true
+      await call(invoke('api:delete', { id }), () => {
+        ok = false
+      })
+      if (!ok) return
       if (get().selectedApiId === id) set({ selectedApiId: null, api: null, response: null })
+      await get().refreshTree()
+    },
+
+    async removeProject(id) {
+      let ok = true
+      await call(invoke('project:delete', { id }), () => {
+        ok = false
+      })
+      if (!ok) return
+      if (get().activeProjectId === id) {
+        set({
+          activeProjectId: null,
+          selectedApiId: null,
+          api: null,
+          response: null,
+          responseError: null,
+          history: [],
+          historyNextCursor: null,
+          envs: [],
+          vars: [],
+        })
+      }
+      await get().refreshTree()
+    },
+
+    async removeCollection(id) {
+      let ok = true
+      await call(invoke('collection:delete', { id }), () => {
+        ok = false
+      })
+      if (!ok) return
+      if (get().api?.collectionId === id) {
+        set({ selectedApiId: null, api: null, response: null, responseError: null })
+      }
+      await get().refreshTree()
+    },
+
+    async duplicateApi(id) {
+      const copy = await call(invoke('api:duplicate', { id }))
+      if (!copy) return
+      await get().refreshTree()
+      await get().selectApi(copy.id)
+    },
+
+    async moveNode(target) {
+      await call(invoke('tree:move', target))
       await get().refreshTree()
     },
 
@@ -258,9 +318,43 @@ export const useApp = create<AppState>((set, get) => {
 
     async refreshHistory() {
       const projectId = get().activeProjectId
-      if (!projectId) return
-      const page = await call(invoke('history:list', { projectId, limit: 50 }))
-      if (page) set({ history: page.items })
+      if (!projectId) {
+        set({ history: [], historyNextCursor: null })
+        return
+      }
+      set({ historyLoading: true })
+      const page = await call(invoke('history:list', { projectId, limit: 200 }))
+      if (!page) {
+        set({ historyLoading: false })
+        return
+      }
+      set({
+        history: page.items,
+        historyNextCursor: page.nextCursor,
+        historyLoading: false,
+      })
+    },
+
+    async loadMoreHistory() {
+      const { activeProjectId, historyNextCursor, historyLoading } = get()
+      if (!activeProjectId || !historyNextCursor || historyLoading) return
+      set({ historyLoading: true })
+      const page = await call(
+        invoke('history:list', {
+          projectId: activeProjectId,
+          cursor: historyNextCursor,
+          limit: 200,
+        }),
+      )
+      if (!page) {
+        set({ historyLoading: false })
+        return
+      }
+      set({
+        history: [...get().history, ...page.items],
+        historyNextCursor: page.nextCursor,
+        historyLoading: false,
+      })
     },
 
     dismissToast() {

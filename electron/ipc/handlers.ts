@@ -13,6 +13,8 @@ export interface HandlerDeps {
   runner: RunnerFlow
   cancel: CancelRegistry
   hello: AppHello
+  /** 每次握手实时读取，底栏显示当前库大小（06 号文档 §4） */
+  dbSize: () => number
 }
 
 /** 存在性校验：缺失即 NOT_FOUND（19 号文档 §2.1 的 UI 错误分流依赖 code） */
@@ -65,7 +67,7 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
   }
 
   const handlers: HandlerMap = {
-    'app:hello': () => deps.hello,
+    'app:hello': () => ({ ...deps.hello, dbSizeBytes: deps.dbSize() }),
 
     'project:list': () => repos.project.listTree(),
     'project:create': (req) => repos.project.create(req),

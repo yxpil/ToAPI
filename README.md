@@ -55,10 +55,11 @@ AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失
 | M2 变量与环境 | **已完成并验证** | `{{var}}` 全链路插值、runtime/环境/全局三级优先、循环引用检测、环境切换与状态栏变量编辑 |
 | M3 脚本引擎 | **已完成并验证** | worker + vm 双层隔离沙箱；`toapi.request`(含 setHeader/setBody/skip/send 子请求)、`vars/env/globals`、`fake.*`、`test/expect`、`log`、md5/sha256/hmac/base64/uuid/timestamp/sleep；5s 熔断（同步 vm timeout + 异步 terminate）、子请求深度 8 / 总数 50 |
 | M4 联合请求 | **已完成并验证** | 声明式提取器 + 脚本式链式；集合 Runner（顺序执行、运行时变量跨接口传递、stopOnFail、逐项断言、进度事件、运行记录持久化）+ Runner 面板 |
+| UI 规范适配 | **已完成并验证** | 三栏可拖宽（记忆栏宽/分屏方向）、上下分屏、底栏 DB 大小与版本、右键菜单 + 拖拽排序 + 删除确认、Ctrl+K 命令面板、响应状态行、历史虚拟滚动/分组/搜索/加载更多、检查/叉号 SVG 反馈、Toast 与空态 |
 | M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；批量报告导出待做 |
 | M5.5–M8 | 未开始 | TAPI、MD 文档、开放调用/MCP、定时与压测、国际化与多平台 |
 
-**已发布 v0.1.1**：`ToAPI-Setup-0.1.1-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.1-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.1 修掉 URL 输入框被标题行挤到 4px 宽的布局缺陷（现独占一行，实测 239px），并在真机验证里加了宽度回归断言。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
+**已发布 v0.1.2**：`ToAPI-Setup-0.1.2-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.2-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.2 按 06/07/21 号文档把 UI 行为补齐：三栏拖拽与分屏偏好记忆、右键菜单/确认框/拖拽排序、命令面板、响应状态行、历史虚拟滚动与搜索、底栏 DB 大小，并把每条硬指标写成 CDP 断言；同时修掉草稿接口空 URL 无法保存的校验缺陷。1024×640 下 URL 输入实测 207px。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
 
 ### 已跑过的验证（不是声明，是实测）
 
@@ -68,7 +69,7 @@ node scripts/verify-flow.mjs             # CDP 驱动真机：建项目→建接
 node scripts/smoke-package.mjs <exe 路径>  # 打包产物冷启动冒烟
 ```
 
-真机验证要点（`scripts/verify-flow.mjs` 输出）：状态徽章 `200`、`200 OK · 16ms · 112 B`、脚本两条断言在响应面板显示为通过、集合 Runner 输出「默认集合 · 1/1 项 · 通过率 100%」、query 送达靶场、重启后接口/URL/历史仍在、DOM 内 emoji 数 0、两轮 console 错误 0。
+真机验证要点（`scripts/verify-flow.mjs` 输出）：状态行 `200 OK · Nms · 112 B`、脚本两条断言通过、两个接口的集合 Runner 输出「默认集合 · 2/2 项 · 通过率 100%」、query 送达靶场；右键菜单 10px/无阴影、删除确认文案、拖拽排序、栏宽 300→240 与上下/左右分屏全部持久化；1024×640 三栏不重叠且 URL 207px；字体仅 12/13/14、按钮全部 999px 且带 title、渐变/投影计数 0、JSON 三色正确；DOM emoji 0、两轮 console 错误 0。
 
 ### 运行
 

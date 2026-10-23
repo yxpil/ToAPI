@@ -54,6 +54,8 @@ export const projectSettingsSchema = z.object({
 const idSchema = z.string().min(1).max(64)
 const nameSchema = z.string().min(1).max(200)
 const urlSchema = z.string().min(1).max(8000)
+/** 草稿可以暂不填 URL，发送时由 buildUrl 给出 VALIDATION 提示 */
+const draftUrlSchema = z.string().max(8000)
 
 const empty = z.object({})
 
@@ -105,7 +107,7 @@ export const INPUT_SCHEMAS = {
     id: idSchema,
     name: nameSchema.optional(),
     method: methodSchema.optional(),
-    url: urlSchema.optional(),
+    url: draftUrlSchema.optional(),
     params: z.array(kvRowSchema).max(500).optional(),
     headers: z.array(kvRowSchema).max(500).optional(),
     bodyType: bodyTypeSchema.optional(),

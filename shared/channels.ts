@@ -225,6 +225,8 @@ export interface AppHello {
   schemaVersion: number
   channelsHash: string
   platform: string
+  /** 主库文件字节数，底栏展示（06 号文档 §4）；内存库为 0 */
+  dbSizeBytes: number
 }
 
 export const CHANNELS = [

@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase, userVersion, type Db } from './db/database'
 import { createRepos, type Repos } from './db/repo'
@@ -54,14 +55,24 @@ export function createKernel(options: KernelOptions): Kernel {
   const flow = new RequestFlow({ engine, files, cancel, repos, emit, script: script ?? undefined })
   const runner = new RunnerFlow({ repos, flow, cancel, emit })
 
+  const dbSize = (): number => {
+    if (options.dbPath === ':memory:') return 0
+    try {
+      return statSync(options.dbPath).size
+    } catch {
+      return 0
+    }
+  }
+
   const hello: AppHello = {
     mainVersion: options.appVersion,
     schemaVersion: userVersion(db),
     channelsHash: channelsHashOf(),
     platform: process.platform,
+    dbSizeBytes: dbSize(),
   }
 
-  const handlers = buildHandlers({ repos, flow, runner, cancel, hello })
+  const handlers = buildHandlers({ repos, flow, runner, cancel, hello, dbSize })
 
   const invoke = async <K extends ChannelName>(channel: K, req: ReqOf<K>): Promise<ResOf<K>> =>
     (handlers[channel] as (r: ReqOf<K>) => ResOf<K> | Promise<ResOf<K>>)(req)

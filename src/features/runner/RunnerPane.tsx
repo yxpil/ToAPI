@@ -3,6 +3,8 @@ import type { RunnerItemView } from '@shared/channels'
 import { useEvent } from '../../lib/ipc'
 import { useRunner } from '../../stores/runner.store'
 import { Icon } from '../../components/Icon'
+import { EmptyState } from '../../components/EmptyState'
+import { Spinner } from '../../components/Spinner'
 
 const statusIcon = (
   status: RunnerItemView['status'],
@@ -77,21 +79,32 @@ export function RunnerPane() {
     current && current.items.length > 0 ? Math.round((passed / current.items.length) * 100) : null
 
   return (
-    <div className="pane-body">
-      <aside style={{ width: 190, borderRight: '1px solid var(--line)', overflow: 'auto' }}>
+    <div className="pane-body" data-testid="runner">
+      <aside className="runner-runs">
         <div className="tree-group">运行记录</div>
-        {runs.length === 0 && <div className="empty">还没有运行记录</div>}
+        {runs.length === 0 && (
+          <EmptyState
+            text="还没有运行记录"
+            action={
+              <button className="pill ghost" title="刷新运行记录" onClick={() => void loadRuns()}>
+                <Icon name="refresh" size={14} /> 刷新
+              </button>
+            }
+          />
+        )}
         {runs.map((run) => (
           <div
             key={run.id}
             className={`tree-row${current?.id === run.id ? ' selected' : ''}`}
             onClick={() => void selectRun(run.id)}
             title={`${run.scopeName} · ${new Date(run.startedAt).toLocaleString()}`}
+            data-testid={`runner-run-${run.id}`}
           >
-            <Icon
-              name={run.finishedAt === null ? 'clock' : run.failed > 0 ? 'cross' : 'check'}
-              size={14}
-            />
+            {run.finishedAt === null ? (
+              <Spinner label="运行中" />
+            ) : (
+              <Icon name={run.failed > 0 ? 'cross' : 'check'} size={14} />
+            )}
             <span className="label">{run.scopeName}</span>
             <span className="meta">
               {run.finishedAt === null ? '运行中' : `${run.passed}/${run.total}`}
@@ -100,13 +113,14 @@ export function RunnerPane() {
         ))}
       </aside>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="runner-detail">
         <div className="response-head">
           <span className="meta">
             {current
               ? `${current.scopeName} · ${current.items.length}/${current.total} 项${rate === null ? '' : ` · 通过率 ${rate}%`}`
               : '选择一次运行查看结果'}
           </span>
+          {running && <Spinner label="运行中" />}
           {running && (
             <button
               className="pill danger"
@@ -119,16 +133,19 @@ export function RunnerPane() {
           )}
         </div>
         {current && current.items.length > 0 ? (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, overflow: 'auto' }}>
+          <ul className="runner-items">
             {current.items.map((item) => (
               <ItemRow key={item.id} item={item} />
             ))}
           </ul>
         ) : (
-          <div className="empty">
-            在左侧集合行点「运行集合」即可批量执行；接口内的断言结果会显示在这里。
-            {failed > 0 ? `（本次 ${failed} 项失败）` : ''}
-          </div>
+          <EmptyState
+            text={
+              failed > 0
+                ? `本次 ${failed} 项失败，展开左侧运行记录查看明细`
+                : '在左侧集合行点「运行集合」批量执行，断言结果显示在这里'
+            }
+          />
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 {
   "name": "toapi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "简约可脚本化的本地 API 请求与测试工具",
   "author": "ToAPI",
