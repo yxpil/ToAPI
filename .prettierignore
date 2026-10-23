@@ -1,0 +1,8 @@
+docs/
+*.md
+dist/
+dist-electron/
+coverage/
+node_modules/
+package-lock.json
+.tmp/

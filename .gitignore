@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-electron/
+out/
+coverage/
+*.log
+.DS_Store
+.vscode/
+*.db
+*.db-wal
+*.db-shm
+backups/
+.tmp/

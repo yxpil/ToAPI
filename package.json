@@ -1,0 +1,56 @@
+{
+  "name": "toapi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "简约可脚本化的本地 API 请求与测试工具",
+  "author": "ToAPI",
+  "license": "UNLICENSED",
+  "main": "dist-electron/main.cjs",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build:renderer": "vite build",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "check:channels": "tsx scripts/check-channels.ts",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "jsonpath-plus": "^11.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "undici": "^8.12.3",
+    "zod": "^4.6.7",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.0.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.0",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
