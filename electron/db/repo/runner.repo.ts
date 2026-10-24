@@ -17,6 +17,8 @@ export interface RunnerItem {
   logs: LogEntry[]
   error: string | null
   sortOrder: number
+  /** 数据驱动迭代序号，从 1 开始（23 号文档 §5.2） */
+  iteration: number
 }
 
 export interface RunnerRun {
@@ -31,18 +33,19 @@ export interface RunnerRun {
   passed: number
   failed: number
   skipped: number
+  iterationCount: number
   items: RunnerItem[]
 }
 
 const SQL = {
-  insertRun: `INSERT INTO runner_run (id, scope_type, scope_id, scope_name, env_id, started_at, total)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  insertRun: `INSERT INTO runner_run (id, scope_type, scope_id, scope_name, env_id, started_at, total, iteration_count)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   finishRun: `UPDATE runner_run SET finished_at = ?, passed = ?, failed = ?, skipped = ?, report_json = ? WHERE id = ?`,
   insertItem: `INSERT INTO runner_item (id, run_id, api_id, api_name, status, history_id, time_ms,
-                                        assertions_json, logs_json, error, sort_order)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                        assertions_json, logs_json, error, sort_order, iteration)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   runById: 'SELECT * FROM runner_run WHERE id = ?',
-  itemsOf: 'SELECT * FROM runner_item WHERE run_id = ? ORDER BY sort_order',
+  itemsOf: 'SELECT * FROM runner_item WHERE run_id = ? ORDER BY iteration, sort_order',
   recent: 'SELECT * FROM runner_run ORDER BY started_at DESC LIMIT ?',
 } as const
 
@@ -58,23 +61,34 @@ const mapItem = (row: Row): RunnerItem => ({
   logs: parseJson<LogEntry[]>(str(row['logs_json']), []),
   error: optStr(row['error']),
   sortOrder: num(row['sort_order']),
+  iteration: num(row['iteration']) || 1,
 })
 
 export class RunnerRepo {
   constructor(private readonly db: Db) {}
 
   startRun(input: {
-    scopeType: 'collection' | 'api' | 'case'
+    scopeType: 'collection' | 'api' | 'case' | 'project'
     scopeId: string
     scopeName: string
     envId: string | null
     total: number
+    iterationCount?: number
   }): { id: string; startedAt: number } {
     const id = ulid()
     const startedAt = Date.now()
     this.db
       .prepare(SQL.insertRun)
-      .run(id, input.scopeType, input.scopeId, input.scopeName, input.envId, startedAt, input.total)
+      .run(
+        id,
+        input.scopeType,
+        input.scopeId,
+        input.scopeName,
+        input.envId,
+        startedAt,
+        input.total,
+        input.iterationCount ?? 1,
+      )
     return { id, startedAt }
   }
 
@@ -94,6 +108,7 @@ export class RunnerRepo {
         j(input.logs),
         input.error,
         input.sortOrder,
+        input.iteration,
       )
     return { ...input, id }
   }
@@ -125,6 +140,7 @@ export class RunnerRepo {
       passed: num(row['passed']),
       failed: num(row['failed']),
       skipped: num(row['skipped']),
+      iterationCount: num(row['iteration_count']) || 1,
       items: (this.db.prepare(SQL.itemsOf).all(id) as unknown as Row[]).map(mapItem),
     }
   }
@@ -142,6 +158,7 @@ export class RunnerRepo {
       passed: num(row['passed']),
       failed: num(row['failed']),
       skipped: num(row['skipped']),
+      iterationCount: num(row['iteration_count']) || 1,
     }))
   }
 }

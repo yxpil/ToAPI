@@ -465,6 +465,44 @@ try {
     `document.querySelectorAll('.pane-body [aria-label="断言跳过"]').length`,
   )
 
+  // ── 数据驱动 Runner（23 号文档 §5.1、06 号文档 §3.6）：粘贴 CSV → 解析 → 两轮迭代 ──
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="Runner 数据行"]'), 'user\\nalice\\nbob')`,
+  )
+  await app.js(`window.__h.click('解析数据行')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="runner-data-summary"]')?.innerText.includes('2 行')`,
+    '数据行解析出 2 行',
+    10000,
+  )
+  report.runnerDataSummary = await app.js(
+    `document.querySelector('[data-testid="runner-data-summary"]')?.innerText ?? null`,
+  )
+  await app.js(`window.__h.click('运行集合')`)
+  await app.waitFor(
+    `document.querySelectorAll('.pane-body [data-testid^="runner-item-iteration-"]').length >= 2`,
+    '轮次标记出现在明细行',
+    30000,
+  )
+  report.runnerIterationBadges = await app.js(
+    `document.querySelectorAll('.pane-body [data-testid^="runner-item-iteration-"]').length`,
+  )
+  report.runnerIterationTexts = await app.js(
+    `[...document.querySelectorAll('.pane-body [data-testid^="runner-item-iteration-"]')].slice(0, 2).map((e) => e.innerText)`,
+  )
+  await app.waitFor(
+    `document.querySelector('.response-head .meta')?.innerText.includes('2 轮迭代')`,
+    '标题行显示迭代轮数',
+    15000,
+  )
+  // 清空数据行，让后续快捷键步骤回到单轮语义
+  await app.js(`window.__h.click('清空数据行')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="runner-data-summary"]')?.innerText.includes('未使用数据行')`,
+    '数据行已清空',
+    10000,
+  )
+
   // ── 右键菜单 / 危险操作确认（06 号文档 §3.4、§5）──
   await app.js(`window.__h.click('响应与历史')`)
   await app.waitFor(`!!document.querySelector('.json-key')`, '响应面板恢复')

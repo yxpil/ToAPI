@@ -130,6 +130,14 @@ export interface SendInput {
   draft?: RequestDraft
   envId?: string | null
   cancelId: string
+  /** Runner 数据行（23 号文档 §5.1）：高于 environment、低于 local */
+  iterationData?: Record<string, string>
+  iteration?: number
+  iterationCount?: number
+  /** 仅 Runner 内允许 pm.execution.setNextRequest */
+  runner?: boolean
+  /** Runner --timeout 覆盖接口自身的超时设置 */
+  timeoutMs?: number
 }
 
 /** 未保存请求（cURL 预览、临时调试） */
@@ -163,17 +171,32 @@ export interface HistoryPage {
 }
 
 export interface RunnerStartInput {
-  scopeType: 'collection' | 'api'
+  scopeType: 'collection' | 'api' | 'project'
   scopeId: string
   envId?: string | null
   cancelId: string
   stopOnFail?: boolean
   delayMs?: number
+  /** 数据行；未指定 iterationCount 时迭代次数等于行数 */
+  iterationData?: Record<string, string>[]
+  iterationCount?: number
+  /** 覆盖本轮所有请求的超时（CLI --timeout） */
+  timeoutMs?: number
 }
 
 /** 无边框窗口的最大化状态（06 号文档 §4） */
 export interface WindowState {
   maximized: boolean
+}
+
+/** 数据文件粘贴解析（渲染进程无 fs 权限，解析只在主进程做） */
+export interface DataParseInput {
+  content: string
+}
+
+export interface DataParseResult {
+  rows: Record<string, string>[]
+  format: 'csv' | 'json'
 }
 
 export interface RunnerItemView {
@@ -188,6 +211,8 @@ export interface RunnerItemView {
   logs: LogEntry[]
   error: string | null
   sortOrder: number
+  /** 数据驱动迭代序号，从 1 开始；无数据文件时为 1 */
+  iteration: number
 }
 
 export interface RunnerRunView {
@@ -202,6 +227,7 @@ export interface RunnerRunView {
   passed: number
   failed: number
   skipped: number
+  iterationCount: number
   items: RunnerItemView[]
 }
 
@@ -264,6 +290,7 @@ export interface ChannelMap {
   'runner:cancel': { req: { runId: string }; res: void }
   'runner:get': { req: IdInput; res: RunnerRunView }
   'runner:list': { req: { limit?: number }; res: Omit<RunnerRunView, 'items'>[] }
+  'data:parse': { req: DataParseInput; res: DataParseResult }
   'postman:inspect': { req: PostmanSource; res: PostmanInspect }
   'postman:import': { req: PostmanImportInput; res: PostmanImportReport }
   'postman:export-collection': {
@@ -322,6 +349,7 @@ export const CHANNELS = [
   'runner:cancel',
   'runner:get',
   'runner:list',
+  'data:parse',
   'postman:inspect',
   'postman:import',
   'postman:export-collection',

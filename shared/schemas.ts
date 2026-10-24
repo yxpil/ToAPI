@@ -66,6 +66,8 @@ const urlSchema = z.string().min(1).max(8000)
 /** 草稿可以暂不填 URL，发送时由 buildUrl 给出 VALIDATION 提示 */
 const draftUrlSchema = z.string().max(8000)
 
+const iterationDataSchema = z.record(z.string().max(200), z.string().max(20000))
+
 const empty = z.object({})
 
 export const draftSchema = z.object({
@@ -164,6 +166,11 @@ export const INPUT_SCHEMAS = {
       draft: draftSchema.optional(),
       envId: idSchema.nullable().optional(),
       cancelId: idSchema,
+      iterationData: iterationDataSchema.optional(),
+      iteration: z.number().int().min(1).max(1_000_000).optional(),
+      iterationCount: z.number().int().min(1).max(1_000_000).optional(),
+      runner: z.boolean().optional(),
+      timeoutMs: z.number().int().min(100).max(600000).optional(),
     })
     .refine((v) => Boolean(v.apiId) !== Boolean(v.draft), {
       message: 'apiId 与 draft 必须二选一',
@@ -176,16 +183,20 @@ export const INPUT_SCHEMAS = {
     limit: z.number().int().min(1).max(200).optional(),
   }),
   'runner:start': z.object({
-    scopeType: z.enum(['collection', 'api']),
+    scopeType: z.enum(['collection', 'api', 'project']),
     scopeId: idSchema,
     envId: idSchema.nullable().optional(),
     cancelId: idSchema,
     stopOnFail: z.boolean().optional(),
     delayMs: z.number().int().min(0).max(60000).optional(),
+    iterationData: z.array(iterationDataSchema).max(100000).optional(),
+    iterationCount: z.number().int().min(1).max(1_000_000).optional(),
+    timeoutMs: z.number().int().min(100).max(600000).optional(),
   }),
   'runner:cancel': z.object({ runId: idSchema }),
   'runner:get': z.object({ id: idSchema }),
   'runner:list': z.object({ limit: z.number().int().min(1).max(100).optional() }),
+  'data:parse': z.object({ content: z.string().min(1).max(2_000_000) }),
   'postman:inspect': z
     .object({
       content: z.string().max(50_000_000).optional(),

@@ -212,6 +212,8 @@ export interface SendResult {
   historyId: string
   skipped: boolean
   skipReason?: string
+  /** pm.execution.setNextRequest：字符串跳转、null 结束本轮；undefined 表示未调用 */
+  nextRequest?: string | null
 }
 
 export interface HistorySummary {

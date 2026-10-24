@@ -56,6 +56,7 @@ jobs 并行：
 - e2e 全套（Windows + macOS + Linux 三 runner 并行）
 - @online 标记用例（真实网络探测，失败只告警不阻塞）
 - 压测引擎长跑回归：本地靶场 200 RPS × 300s，断言资源预算（13 号文档 §3）
+- 自举回归：用 `toapi run` 跑真实 Collection（含 `--data` 数据驱动、`--bail`、`--reporters junit`），退出码非 0 即夜间失败，JUnit 与 HTML 报告以 artifact 上传（23 号文档 §5.3）
 - DB 迁移矩阵：v1..v(n-1) 样本库逐一升到最新
 - 失败 → 自动开 issue（label: nightly-failure，指派当天值班）
 ```

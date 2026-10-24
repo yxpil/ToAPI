@@ -9,10 +9,22 @@ interface RunnerState {
   activeRunId: string | null
   error: string | null
 
+  /** 数据驱动（23 号文档 §5.1）：粘贴的 CSV/JSON 文本与解析出的行 */
+  dataText: string
+  dataRows: Record<string, string>[]
+  dataFormat: 'csv' | 'json' | null
+  dataError: string | null
+  /** null = 跟随行数 */
+  iterationCount: number | null
+
   loadRuns(): Promise<void>
   runCollection(collectionId: string, collectionName: string): Promise<void>
   selectRun(runId: string): Promise<void>
   cancel(): Promise<void>
+  parseData(): Promise<void>
+  setDataText(value: string): void
+  clearData(): void
+  setIterationCount(value: number | null): void
   applyProgress(payload: {
     runId: string
     item: RunnerRunView['items'][number]
@@ -26,6 +38,11 @@ export const useRunner = create<RunnerState>((set, get) => ({
   running: false,
   activeRunId: null,
   error: null,
+  dataText: '',
+  dataRows: [],
+  dataFormat: null,
+  dataError: null,
+  iterationCount: null,
 
   async loadRuns() {
     try {
@@ -35,14 +52,44 @@ export const useRunner = create<RunnerState>((set, get) => ({
     }
   },
 
+  async parseData() {
+    const content = get().dataText.trim()
+    if (content === '') {
+      set({ dataRows: [], dataFormat: null, dataError: null })
+      return
+    }
+    try {
+      const { rows, format } = await invoke('data:parse', { content })
+      set({ dataRows: rows, dataFormat: format, dataError: null })
+    } catch (e) {
+      set({ dataRows: [], dataFormat: null, dataError: (e as Error).message })
+    }
+  },
+
+  setDataText(value) {
+    set({ dataText: value })
+  },
+
+  clearData() {
+    set({ dataText: '', dataRows: [], dataFormat: null, dataError: null, iterationCount: null })
+  },
+
+  setIterationCount(value) {
+    set({ iterationCount: value })
+  },
+
   async runCollection(collectionId, collectionName) {
     if (get().running) return
+    const { dataRows, iterationCount } = get()
+    const count = iterationCount ?? (dataRows.length > 0 ? dataRows.length : undefined)
     set({ running: true, error: null, activeRunId: null, current: null })
     try {
       const { runId } = await invoke('runner:start', {
         scopeType: 'collection',
         scopeId: collectionId,
         cancelId: newCancelId(),
+        ...(dataRows.length > 0 ? { iterationData: dataRows } : {}),
+        ...(count ? { iterationCount: count } : {}),
       })
       set({ activeRunId: runId })
       await get().selectRun(runId)

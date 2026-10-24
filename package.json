@@ -6,6 +6,9 @@
   "author": "ToAPI",
   "license": "UNLICENSED",
   "main": "dist-electron/main.cjs",
+  "bin": {
+    "toapi": "bin/toapi.cjs"
+  },
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -16,6 +19,7 @@
     "build:electron": "node scripts/build-electron.mjs",
     "build:renderer": "vite build",
     "start": "electron .",
+    "cli": "node bin/toapi.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

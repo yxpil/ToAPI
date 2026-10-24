@@ -20,6 +20,8 @@ export interface ScriptOutcome {
   runtimeWrites: Record<string, string>
   /** 脚本内 pm.variables.set 的请求级 local 变量 */
   localWrites: Record<string, string>
+  /** pm.execution.setNextRequest：字符串跳转、null 结束本轮；未调用时缺省 */
+  nextRequest?: string | null
   skip?: string
   error?: { code: 'SCRIPT_ERROR' | 'SCRIPT_TIMEOUT'; message: string }
 }
@@ -150,6 +152,7 @@ export class ScriptVM {
               logs,
               runtimeWrites: msg.runtimeWrites ?? {},
               localWrites: msg.localWrites ?? {},
+              ...(msg.nextRequest === undefined ? {} : { nextRequest: msg.nextRequest }),
               skip: msg.skip,
             })
             return

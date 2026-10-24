@@ -46,4 +46,18 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // CLI 的 CJS 引导壳：只有 require/__dirname/process，不含业务逻辑
+    files: ['bin/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'readonly',
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 )

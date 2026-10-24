@@ -50,6 +50,10 @@ export interface ScriptJob {
   requestId: string | null
   iteration: number
   iterationCount: number
+  /** 当前迭代的数据行（23 号文档 §5.1）；无数据文件时为 {} */
+  iterationData: Record<string, string>
+  /** 仅 Runner/CLI 内 pm.execution.setNextRequest 生效 */
+  runner: boolean
   collectionId: string | null
   projectId: string
   auth: Auth
@@ -100,6 +104,8 @@ export type WorkerToHost =
       runtimeWrites?: Record<string, string>
       /** pm.variables.set 的请求级 local 变量，仅在本请求后续脚本可见 */
       localWrites?: Record<string, string>
+      /** pm.execution.setNextRequest：字符串跳转、null 结束本轮；未调用时缺省 */
+      nextRequest?: string | null
       assertions: { name: string; pass: boolean; skipped?: boolean; error?: string }[]
     }
   | { type: 'fail'; message: string }

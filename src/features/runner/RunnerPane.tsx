@@ -14,7 +14,7 @@ const statusIcon = (
   return { name: 'cross', color: 'var(--err)', label: '失败' }
 }
 
-function ItemRow({ item }: { item: RunnerItemView }) {
+function ItemRow({ item, iterationCount }: { item: RunnerItemView; iterationCount: number }) {
   const icon = statusIcon(item.status)
   return (
     <li style={{ borderBottom: '1px solid var(--line)' }}>
@@ -25,6 +25,11 @@ function ItemRow({ item }: { item: RunnerItemView }) {
           style={{ color: icon.color }}
           label={`接口${icon.label}`}
         />
+        {iterationCount > 1 && (
+          <span className="meta" data-testid={`runner-item-iteration-${String(item.id)}`}>
+            第 {item.iteration}/{iterationCount} 轮
+          </span>
+        )}
         <span className="url" style={{ fontFamily: 'var(--font-ui)' }}>
           {item.apiName}
         </span>
@@ -63,6 +68,17 @@ function ItemRow({ item }: { item: RunnerItemView }) {
 
 export function RunnerPane() {
   const { runs, current, running, loadRuns, selectRun, cancel } = useRunner()
+  const dataText = useRunner((s) => s.dataText)
+  const dataRows = useRunner((s) => s.dataRows)
+  const dataFormat = useRunner((s) => s.dataFormat)
+  const dataError = useRunner((s) => s.dataError)
+  const iterationCount = useRunner((s) => s.iterationCount)
+  const setDataText = useRunner((s) => s.setDataText)
+  const parseData = useRunner((s) => s.parseData)
+  const clearData = useRunner((s) => s.clearData)
+  const setIterationCount = useRunner((s) => s.setIterationCount)
+
+  const effectiveIterations = iterationCount ?? (dataRows.length > 0 ? dataRows.length : 1)
 
   useEffect(() => {
     void loadRuns()
@@ -117,7 +133,7 @@ export function RunnerPane() {
         <div className="response-head">
           <span className="meta">
             {current
-              ? `${current.scopeName} · ${current.items.length}/${current.total} 项${rate === null ? '' : ` · 通过率 ${rate}%`}`
+              ? `${current.scopeName} · ${current.items.length}/${current.total} 项${current.iterationCount > 1 ? ` · ${current.iterationCount} 轮迭代` : ''}${rate === null ? '' : ` · 通过率 ${rate}%`}`
               : '选择一次运行查看结果'}
           </span>
           {running && <Spinner label="运行中" />}
@@ -132,10 +148,59 @@ export function RunnerPane() {
             </button>
           )}
         </div>
+        <div className="runner-data" data-testid="runner-data">
+          <label className="field">
+            <span>数据行</span>
+            <textarea
+              rows={3}
+              spellCheck={false}
+              placeholder={'user,age\nalice,30'}
+              value={dataText}
+              onChange={(e) => setDataText(e.target.value)}
+              aria-label="Runner 数据行"
+            />
+          </label>
+          <div className="runner-data-row">
+            <button
+              className="pill ghost"
+              title="解析数据行"
+              onClick={() => void parseData()}
+              data-testid="runner-data-parse"
+            >
+              <Icon name="refresh" size={14} /> 解析
+            </button>
+            {(dataRows.length > 0 || dataText !== '') && (
+              <button className="pill ghost" title="清空数据行" onClick={clearData}>
+                <Icon name="cross" size={14} /> 清空
+              </button>
+            )}
+            <label className="field">
+              <span>迭代次数</span>
+              <input
+                type="number"
+                min={1}
+                placeholder={String(dataRows.length > 0 ? dataRows.length : 1)}
+                value={iterationCount ?? ''}
+                onChange={(e) => {
+                  const next = Number.parseInt(e.target.value, 10)
+                  setIterationCount(Number.isFinite(next) && next > 0 ? next : null)
+                }}
+                aria-label="迭代次数"
+              />
+            </label>
+            <span className="meta" data-testid="runner-data-summary">
+              {dataError
+                ? dataError
+                : dataRows.length > 0
+                  ? `${dataFormat === 'csv' ? 'CSV' : 'JSON'} · ${dataRows.length} 行 · 迭代 ${effectiveIterations} 次`
+                  : '未使用数据行，按接口顺序跑一轮'}
+            </span>
+          </div>
+        </div>
         {current && current.items.length > 0 ? (
           <ul className="runner-items">
             {current.items.map((item) => (
-              <ItemRow key={item.id} item={item} />
+              <ItemRow key={item.id} item={item} iterationCount={current.iterationCount} />
             ))}
           </ul>
         ) : (

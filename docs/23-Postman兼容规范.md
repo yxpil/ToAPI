@@ -3,6 +3,7 @@
 > 目标：**本地全量兼容**。凡 Postman 能在单机完成的能力，ToAPI 都要有等价物；
 > 云端账号、团队工作区、Postman 云服务不在范围内（见 §9）。
 > 兼容分四批交付，每批都是可独立发版、可回归验证的闭环。
+> Apifox 等同类工具的资产互操作归入 B4（§7.1）：以 Postman v2.1 与 OpenAPI 为桥，原生格式须有用户提供的真实导出样本才实现。
 
 ## 1. 兼容原则
 
@@ -22,7 +23,7 @@
 | B1 资产与脚本 | **v0.2.0** | Collection v2.1 / Environment 导入导出、集合级 auth/variables/scripts 继承、`pm.*` 沙箱、动态变量、常用沙箱库 | 真实 Collection 往返无损；Postman 官方脚本示例全绿 |
 | B2 数据驱动与 CLI | v0.3.0 | CSV/JSON 数据文件、多迭代、`pm.iterationData`、`pm.execution.setNextRequest`、`toapi run` 无头 CLI、JUnit/JSON/HTML 报告 | CLI 退出码可被 CI 判定；数据行注入与迭代数正确 |
 | B3 协议扩展 | v0.4.0 | GraphQL、WebSocket、SSE、gRPC、MQTT | 每种协议有真实往返用例与历史记录 |
-| B4 自动化与长尾 | v0.5.0 | OpenAPI 2.0/3.0/3.1 导入导出、本地 Mock、保存示例、代码生成扩展、`pm.visualizer`、认证长尾与传输能力 | 认证矩阵全绿；OpenAPI 导入可跑 |
+| B4 自动化与长尾 | v0.5.0 | OpenAPI 2.0/3.0/3.1 导入导出、本地 Mock、保存示例、代码生成扩展、`pm.visualizer`、认证长尾与传输能力、Apifox 互操作（§7.1） | 认证矩阵全绿；OpenAPI 导入可跑；Apifox 导出样本往返无损 |
 
 > 批次之间不破坏数据：B1 的 `source_json` 字段为后续批次保留原文，后续解析器可逐步消化，无需重新导入。
 
@@ -159,11 +160,11 @@ project.pre_script → collection 链由外到内 pre_script → api.pre_script
 | 变量 | `pm.collectionVariables.*` | ✅ B1 | 读写当前集合；Runner 中写回集合定义 |
 | 变量 | `pm.environment.*` | ✅ B1 | 写当前激活环境，持久化 |
 | 变量 | `pm.globals.*` | ✅ B1 | 写全局变量，持久化 |
-| 变量 | `pm.iterationData.*` | ✅ B2 | 数据行只读视图 |
-| 信息 | `pm.info.requestName / requestId / eventName / iteration / iterationCount` | ✅ B1（iteration 在 B2 生效） | Runner 外 `iteration=1/1` |
+| 变量 | `pm.iterationData.*` | ✅ B2 | 数据行只读视图（`get/has/toObject`）；行值也参与 `{{列名}}` 插值 |
+| 信息 | `pm.info.requestName / requestId / eventName / iteration / iterationCount` | ✅ B1 + B2 | Runner/CLI 内给真实轮次；单次发送固定 `1/1` |
 | 子请求 | `pm.sendRequest(urlOrOptions, callback?)` | ✅ B1 | 返回 thenable；选项支持 method/url/header/body/auth(basic,bearer,apikey)；复用代理、CookieJar、历史 |
-| Cookie | `pm.cookies.get/set/has/unset/toObject` | ✅ B1 | 项目级 CookieJar；`pm.cookies.jar()` 的异步域接口 B2 |
-| 流程 | `pm.execution.setNextRequest(name \| null)`、`skipRequest()` | ✅ B2 | Runner 内生效；集合外调用抛错 |
+| Cookie | `pm.cookies.get/set/has/unset/toObject` | ✅ B1 | 项目级 CookieJar；`pm.cookies.jar()` 的异步域接口不提供，调用即报错并指向 `pm.cookies.get/set` |
+| 流程 | `pm.execution.setNextRequest(name \| null)`、`skipRequest()` | ✅ B2 | Runner/CLI 内生效（§5.2）；单次发送里调用只记警告日志，不抛错打断脚本 |
 | 可视化 | `pm.visualizer.set(template, data)` | ✅ B4 | 响应页 iframe 沙箱渲染（`sandbox` 无脚本外联） |
 | 库 | `pm.require(...)` | ❌ 不支持 | 沙箱不允许任意模块加载；改用内置库（§4.4） |
 | 云 | `pm.workspace / pm.vault / pm.api` | ❌ 不支持 | 无账号体系，见 §9 |
@@ -219,23 +220,30 @@ B1 必须通过：`to.equal / eql / deep.equal`、`to.be.true / false / null / u
 | JSON | 对象数组，每个对象一行；非对象行报错并中止 |
 | 行注入 | 每行作为 `iterationData`，在变量优先级中高于 environment、低于 local |
 | 列名 | 原样作为变量名，支持 `{{column}}` 与 `pm.iterationData.get('column')` |
+| 入口 | CLI `--data <file>`；GUI Runner 面板粘贴数据行（走 `data:parse` 通道，06 号文档 §3.6） | 两条入口共用同一个解析器 `electron/flow/data-file.ts` |
 
 ### 5.2 迭代与流程
 
-- 迭代次数默认 = 数据行数；无数据文件时默认 1 次；`--iteration-count N` 显式指定，数据行不足时循环取行。
+- 迭代次数默认 = 数据行数；无数据文件时默认 1 次；`--iteration-count N` 显式指定，数据行不足时循环取行（`rows[i % rows.length]`）。
 - `pm.info.iteration` 从 1 开始，`iterationCount` 为本轮总次数。
-- `pm.execution.setNextRequest(name)` 跳转到指定请求（按名称匹配当前集合内请求）；`null` 结束本轮；`skipRequest()` 跳过当前请求但仍继续。
-- 失败语义：请求错误、断言失败、提取器未命中均计失败；`--bail` 首次失败即停；其余按 `stopOnFail`（05 号文档 §5）。
+- `pm.execution.setNextRequest(name)` 跳转到指定请求（按名称匹配本次范围内的请求，也接受接口 ID）；`null` 或不传参结束本轮；未知名同样结束本轮而不报错；`skipRequest()` 跳过当前请求但仍继续。
+- 跳转次数上限 `接口数 × 20 + 20`，超限记一条 `error` 并终止本轮，防脚本自跳死循环。
+- `setNextRequest` 只在 Runner/CLI 上下文生效：单次发送（GUI、Local API）里调用只记一条警告日志，`SendResult.nextRequest` 不回传。
+- 失败语义：请求错误、断言失败、**Runner 上下文里的提取器未命中**均计失败（未命中以 `提取器 <名称>: 未命中` 的失败断言呈现）；`--bail` 首次失败即停；其余按 `stopOnFail`（05 号文档 §5）。
+- GUI Runner 在迭代数 > 1 时显示「第 N/M 轮」文字标记，计划数按 `接口数 × 迭代数` 计（06 号文档 §3.6）。
 
 ### 5.3 CLI `toapi run`
 
 ```
-toapi run <collection.tapi | postman_collection.json> \
+toapi run <postman_collection.json> \
   --env <environment.json|name> --globals <globals.json> \
   --data <data.csv|data.json> --iteration-count <n> \
-  --folder <name> --delay <ms> --timeout <ms> --bail \
+  --collection <name|id> | --folder <name> \
+  --delay <ms> --timeout <ms> --bail --quiet \
   --reporters cli,json,junit,html --reporter-json-export <path> \
   --reporter-junit-export <path> --reporter-html-export <path>
+
+toapi run --db <toapi.db> --project <name|id> [...同上]
 ```
 
 | 退出码 | 含义 |
@@ -244,8 +252,11 @@ toapi run <collection.tapi | postman_collection.json> \
 | 1 | 存在失败项 / 断言失败 / 脚本错误 |
 | 2 | 用法错误、文件不可读、导入失败、数据库不可写 |
 
-- CLI 与 GUI 共用 `kernel`（无窗口模式），Runner、变量、脚本、CookieJar 行为完全一致（17 号文档）；
-- 输出至少包含：每请求状态/耗时/断言数、汇总通过率、失败明细、报告路径；
+- 两种来源：**位置参数**导入 Postman Collection 到临时库跑完即弃（CI 用，绝不写用户数据）；**`--db`** 直接打开已有 ToAPI 库（位置参数与 `--db` 互斥）。`.tapi` 作为输入在 M5.5 落地前明确拒绝并给出提示，不做静默降级。
+- 环境可给文件（按 Postman Environment 导入后激活）或库内名称；`--globals` 接受 Postman Globals 导出或普通键值对象，落全局变量；数据行优先级高于同名全局变量。
+- CLI 与 GUI 共用 `kernel`（无窗口模式），Runner、变量、脚本、CookieJar 行为完全一致（17 号文档）；`runCli(argv)` 返回退出码而不 `process.exit`，`bin/toapi.cjs` 只负责落 exitCode，因此可被集成测试直接调用。
+- 运行在纯 Node（`node:sqlite`，要求 Node ≥ 24），不需要 Electron 运行时；报告导出缺省路径 `toapi-report.json` / `toapi-junit.xml` / `toapi-report.html`。
+- 输出至少包含：每请求轮次/状态/耗时/断言数、失败明细、汇总通过率、报告路径；`--quiet` 只留汇总。
 - 报告格式：CLI 文本、JSON（机器可读）、JUnit XML（CI）、HTML（人读，复用压测报告样式）。
 
 ## 6. B3：协议扩展
@@ -276,6 +287,24 @@ toapi run <collection.tapi | postman_collection.json> \
 | 认证长尾 | OAuth2（授权码 + PKCE / 客户端凭证 / 密码 / 设备码，令牌缓存与刷新）、OAuth1、Digest、NTLM、AWS SigV4、Hawk、ASAP、EdgeGrid、JWT 生成、客户端证书（PEM/PFX）、代理认证、自定义 CA、关闭 TLS 校验 |
 | 沙箱扩展库 | `xml2js`、`cheerio`、`tv4` |
 
+### 7.1 Apifox 互操作（B4）
+
+Apifox 与 ToAPI 的定位重叠（本地/团队 API 设计 + 调试 + 测试），跨部门混用时必然出现资产互转需求。立场是**互操作，不竞争**：不复制 Apifox 的云协作与在线文档能力（§9），只保证资产能双向流动。
+
+| 通道 | 方向 | 依据 | 状态 |
+|---|---|---|---|
+| Postman Collection v2.1 | Apifox → ToAPI | Apifox 官方支持导出 Postman 格式，ToAPI 的 B1 解析器直接可用（§3） | ✅ B1 已具备，B4 补 Apifox 导出样本回归 |
+| Postman Environment | Apifox → ToAPI | 同上（§3.5） | ✅ B1 已具备 |
+| OpenAPI 3.x | Apifox ⇄ ToAPI | Apifox 官方导出 OpenAPI（YAML/JSON），ToAPI B4 导入 OpenAPI（§7） | B4 |
+| Markdown / HTML 文档 | Apifox → ToAPI | Apifox 可导出 Markdown，ToAPI 的 `.tapi.md` 解读链路（10 号文档）可读 | B4 |
+| Apifox 原生项目 JSON | Apifox ⇄ ToAPI | **格式未公开文档化**，字段语义只能从真实导出文件反推 | B4，**前置条件见下** |
+
+**原生格式前置条件（硬约束）**：Apifox 原生 JSON/YAML 的 schema 没有公开规范，凭第三方样本或猜测实现会产生"导入成功但语义错位"的静默错误（违反 §1「不静默丢数据」）。因此原生格式解析器**必须由用户提供一份真实导出样本后才开工**；样本到位前，UI 与文档只声明 Postman / OpenAPI 两条桥。样本需覆盖：目录层级、四种 body、auth、环境与全局变量、前置/后置脚本、数据模型（schema 复用）、保存示例。
+
+- 导入映射：Apifox 目录 → 集合；接口 → 接口；数据模型 → `source_json` 留存（ToAPI 无 schema 复用模型，B4 只保真不消化）；环境与全局变量 → 环境变量 / 全局变量；Apifox「接口用例」→ 保存示例（§7）。
+- 导出映射：ToAPI 项目 → Apifox 可导入的 Postman v2.1（首选，零新格式风险）；原生导出仅在样本反推出的 schema 有把握时提供。
+- 未知字段一律进 `source_json` + 导入报告 `warnings`，与 Postman 链路同规则（§3.6）。
+
 ## 8. IPC 与入口
 
 新增通道（并入 04 号文档 §3.5）：
@@ -291,6 +320,7 @@ toapi run <collection.tapi | postman_collection.json> \
 - `content` 与 `filePath` 二选一；`content` 供粘贴导入与 E2E 使用，`filePath` 供文件选择器；
 - 导出默认弹保存对话框；指定 `filePath` 时直接写入（CLI / 测试）；
 - 所有导入在一个事务内完成，失败整体回滚（08 号文档 §5 同款约束）。
+- Apifox 资产（§7.1）：Postman / OpenAPI / Markdown 三条桥复用上述 `postman:*` 与 B4 的 OpenAPI 通道，不新增入口；原生格式解析器落地时才新增 `apifox:inspect / apifox:import / apifox:export`（前置条件：用户提供真实导出样本），并入 04 号文档 §3.5。
 
 UI 入口（06 号文档）：
 
@@ -315,6 +345,8 @@ UI 入口（06 号文档）：
 | 分布式压测 | 非目标（13 号文档） | 单机压测 |
 
 > 线协议兼容 ≠ 云服务兼容。上表是「本地全量兼容」的范围定义，发布说明不得宣称支持云协作。
+>
+> Apifox 同理：只兼容其**可导出的文件资产**（Postman v2.1 / Environment / OpenAPI / Markdown，见 §7.1），不兼容 Apifox 云侧的团队空间、在线文档托管、云端 Mock 与定时任务。
 
 ## 10. 验收标准
 
@@ -332,7 +364,7 @@ UI 入口（06 号文档）：
 
 - B2：CSV/JSON 数据行、迭代数、`setNextRequest`、`--bail`、四种报告、退出码 0/1/2 全部有集成用例。
 - B3：五种协议各有本地靶场用例，请求进入历史与 Runner 报告。
-- B4：认证矩阵（每类认证一个靶场端点）、OpenAPI 往返、Mock 路由、示例导出、`pm.visualizer` 隔离测试。
+- B4：认证矩阵（每类认证一个靶场端点）、OpenAPI 往返、Mock 路由、示例导出、`pm.visualizer` 隔离测试；Apifox 互操作以「用户提供的真实 Apifox 导出样本」为夹具，走 Postman/OpenAPI 桥导入 → 导出 → 再导入语义无损（§7.1），原生格式在样本到位前不进入验收清单。
 - 所有批次的用例并入 07 号文档 §2.14 与 21 号文档执行清单。
 
 ## 11. 已知差异与迁移说明

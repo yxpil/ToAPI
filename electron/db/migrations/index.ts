@@ -155,6 +155,16 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE variable ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 4,
+    name: '004_runner_iteration',
+    up: `
+      ALTER TABLE runner_run ADD COLUMN iteration_count INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE runner_item ADD COLUMN iteration INTEGER NOT NULL DEFAULT 1;
+      DROP INDEX runner_item_run_idx;
+      CREATE INDEX runner_item_run_idx ON runner_item(run_id, iteration, sort_order);
+    `,
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)

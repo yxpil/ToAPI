@@ -7,12 +7,16 @@ import type { RequestFlow } from './request'
 import type { CancelRegistry } from '../infra/cancel-registry'
 
 export interface RunnerStartInput {
-  scopeType: 'collection' | 'api'
+  scopeType: 'collection' | 'api' | 'project'
   scopeId: string
   envId?: string | null
   cancelId: string
   stopOnFail?: boolean
   delayMs?: number
+  /** 数据行；未给 iterationCount 时迭代次数等于行数（23 号文档 §5.1） */
+  iterationData?: Record<string, string>[]
+  iterationCount?: number
+  timeoutMs?: number
 }
 
 export interface RunnerDeps {
@@ -28,8 +32,13 @@ interface ProgressEvent {
   finished: boolean
 }
 
+interface Target {
+  id: string
+  name: string
+}
+
 /** 集合内接口的执行顺序：集合自身接口 → 子集合递归（05 号文档 §5 模式 B） */
-const collectApiIds = (deps: RunnerDeps, rootId: string): { id: string; name: string }[] => {
+const collectApiIds = (deps: RunnerDeps, rootId: string): Target[] => {
   const collections = deps.repos.collection.listByProject(
     deps.repos.collection.get(rootId)?.projectId ?? '',
   )
@@ -41,7 +50,7 @@ const collectApiIds = (deps: RunnerDeps, rootId: string): { id: string; name: st
     else childrenOf.set(key, [c.id])
   }
 
-  const out: { id: string; name: string }[] = []
+  const out: Target[] = []
   const visit = (collectionId: string): void => {
     for (const api of deps.repos.api.listByCollection(collectionId))
       out.push({ id: api.id, name: api.name })
@@ -50,6 +59,13 @@ const collectApiIds = (deps: RunnerDeps, rootId: string): { id: string; name: st
   visit(rootId)
   return out
 }
+
+/** 项目范围：按根集合顺序逐个递归（CLI `toapi run --project`） */
+const collectProject = (deps: RunnerDeps, projectId: string): Target[] =>
+  deps.repos.collection
+    .listByProject(projectId)
+    .filter((c) => (c.parentId ?? '') === '')
+    .flatMap((root) => collectApiIds(deps, root.id))
 
 const verdict = (
   assertions: AssertionResult[],
@@ -66,13 +82,14 @@ const verdict = (
 
 export class RunnerFlow {
   private readonly active = new Map<string, { stop: boolean }>()
+  private readonly pending = new Map<string, Promise<void>>()
 
   constructor(private readonly deps: RunnerDeps) {}
 
   async start(input: RunnerStartInput): Promise<{ runId: string; total: number }> {
     const { repos } = this.deps
 
-    let targets: { id: string; name: string }[]
+    let targets: Target[]
     let scopeName: string
     let envProjectId: string
 
@@ -83,6 +100,12 @@ export class RunnerFlow {
       targets = [{ id: api.id, name: api.name }]
       scopeName = api.name
       envProjectId = collection?.projectId ?? ''
+    } else if (input.scopeType === 'project') {
+      const project = repos.project.get(input.scopeId)
+      if (!project) throw new IpcErrorRaised({ code: 'NOT_FOUND', message: '项目不存在' })
+      targets = collectProject(this.deps, project.id)
+      scopeName = project.name
+      envProjectId = project.id
     } else {
       const collection = repos.collection.get(input.scopeId)
       if (!collection) throw new IpcErrorRaised({ code: 'NOT_FOUND', message: '集合不存在' })
@@ -92,8 +115,12 @@ export class RunnerFlow {
     }
 
     if (targets.length === 0) {
-      throw new IpcErrorRaised({ code: 'VALIDATION', message: '该集合下没有接口' })
+      throw new IpcErrorRaised({ code: 'VALIDATION', message: '该范围内没有接口' })
     }
+
+    const rows = input.iterationData ?? []
+    const iterationCount = input.iterationCount ?? (rows.length > 0 ? rows.length : 1)
+    const total = targets.length * iterationCount
 
     const envId =
       input.envId !== undefined
@@ -104,14 +131,17 @@ export class RunnerFlow {
       scopeId: input.scopeId,
       scopeName,
       envId,
-      total: targets.length,
+      total,
+      iterationCount,
     })
 
     const state = { stop: false }
     this.active.set(runId, state)
 
-    void this.loop({ runId, targets, input, state, envProjectId })
-    return { runId, total: targets.length }
+    const loop = this.loop({ runId, targets, rows, iterationCount, input, state, envProjectId })
+    this.pending.set(runId, loop)
+    void loop.catch(() => undefined)
+    return { runId, total }
   }
 
   cancel(runId: string): void {
@@ -120,86 +150,148 @@ export class RunnerFlow {
     this.deps.cancel.abort(`runner:${runId}`)
   }
 
+  /** CLI 等待一次运行结束；UI 路径靠进度事件，不需要它 */
+  whenDone(runId: string): Promise<void> | undefined {
+    return this.pending.get(runId)
+  }
+
   private async loop(args: {
     runId: string
-    targets: { id: string; name: string }[]
+    targets: Target[]
+    rows: Record<string, string>[]
+    iterationCount: number
     input: RunnerStartInput
     state: { stop: boolean }
     envProjectId: string
   }): Promise<void> {
     const { repos } = this.deps
-    const { runId, targets, input, state, envProjectId } = args
+    const { runId, targets, rows, iterationCount, input, state, envProjectId } = args
     let passed = 0
     let failed = 0
     let skipped = 0
+    let lastSeq = 0
 
-    // 每次运行前清运行时变量，避免上次结果泄漏（07 号文档 §2.4）
-    this.deps.flow.clearSession(envProjectId)
-
-    for (const [index, target] of targets.entries()) {
-      if (state.stop) break
-      const startedAt = Date.now()
-      let item: RunnerItem
-
-      try {
-        const result = await this.deps.flow.send({
-          apiId: target.id,
-          // 未显式指定环境时不能传 null，否则会把项目激活环境顶掉
-          ...(input.envId !== undefined ? { envId: input.envId } : {}),
-          cancelId: `runner:${runId}`,
-        })
-        const call = verdict(result.script.assertions, result.response.status, result.skipped)
-        item = {
-          id: '',
-          runId,
-          apiId: target.id,
-          apiName: target.name,
-          status: call.status,
-          historyId: result.historyId || null,
-          timeMs: result.response.timeMs,
-          assertions: result.script.assertions,
-          logs: [...result.script.preLogs, ...result.script.postLogs],
-          error: call.error,
-          sortOrder: index,
-        }
-      } catch (e) {
-        const message = e instanceof IpcErrorRaised ? e.payload.message : (e as Error).message
-        item = {
-          id: '',
-          runId,
-          apiId: target.id,
-          apiName: target.name,
-          status: 'error',
-          historyId: null,
-          timeMs: Date.now() - startedAt,
-          assertions: [],
-          logs: [],
-          error: message,
-          sortOrder: index,
-        }
-      }
-
+    const tally = (item: RunnerItem): RunnerItem => {
       const saved = repos.runner.addItem(item)
       if (saved.status === 'passed') passed += 1
       else if (saved.status === 'skipped') skipped += 1
       else failed += 1
+      this.deps.emit('event:runner-progress', { runId, item: saved, finished: false })
+      return saved
+    }
 
-      this.deps.emit('event:runner-progress', {
-        runId,
-        item: saved,
-        finished: false,
-      } satisfies ProgressEvent)
+    // 每次运行前清运行时变量，避免上次结果泄漏（07 号文档 §2.4）
+    this.deps.flow.clearSession(envProjectId)
 
-      if (input.stopOnFail && saved.status !== 'passed' && saved.status !== 'skipped') {
-        state.stop = true
-      }
-      if (input.delayMs && input.delayMs > 0 && !state.stop) {
-        await new Promise((r) => setTimeout(r, input.delayMs))
+    for (let iteration = 1; iteration <= iterationCount; iteration += 1) {
+      if (state.stop) break
+      const row = rows.length > 0 ? rows[(iteration - 1) % rows.length] : undefined
+      // setNextRequest 可反复跳回同一接口，用步数上限兜底
+      const maxSteps = targets.length * 20 + 20
+      let seq = 0
+      let steps = 0
+      let index = 0
+
+      while (index < targets.length && !state.stop) {
+        if (steps > maxSteps) {
+          const target = targets[index]!
+          tally({
+            id: '',
+            runId,
+            apiId: target.id,
+            apiName: target.name,
+            status: 'error',
+            historyId: null,
+            timeMs: 0,
+            assertions: [],
+            logs: [],
+            error: 'pm.execution.setNextRequest 跳转次数超过上限，已终止本轮迭代',
+            sortOrder: seq,
+            iteration,
+          })
+          break
+        }
+
+        const target = targets[index]!
+        const startedAt = Date.now()
+        let item: RunnerItem
+        let jumpTo: number | null = null
+        let endIteration = false
+
+        try {
+          const result = await this.deps.flow.send({
+            apiId: target.id,
+            // 未显式指定环境时不能传 null，否则会把项目激活环境顶掉
+            ...(input.envId !== undefined ? { envId: input.envId } : {}),
+            cancelId: `runner:${runId}`,
+            ...(row ? { iterationData: row } : {}),
+            iteration,
+            iterationCount,
+            runner: true,
+            ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
+          })
+          const call = verdict(result.script.assertions, result.response.status, result.skipped)
+          item = {
+            id: '',
+            runId,
+            apiId: target.id,
+            apiName: target.name,
+            status: call.status,
+            historyId: result.historyId || null,
+            timeMs: result.response.timeMs,
+            assertions: result.script.assertions,
+            logs: [...result.script.preLogs, ...result.script.postLogs],
+            error: call.error,
+            sortOrder: seq,
+            iteration,
+          }
+
+          // setNextRequest：字符串按名称/ID 跳转，null 结束本轮，未知名同样结束（Postman 语义）
+          if (result.nextRequest === null) endIteration = true
+          else if (typeof result.nextRequest === 'string') {
+            const jump = targets.findIndex(
+              (t) => t.name === result.nextRequest || t.id === result.nextRequest,
+            )
+            if (jump === -1) endIteration = true
+            else jumpTo = jump
+          }
+        } catch (e) {
+          const message = e instanceof IpcErrorRaised ? e.payload.message : (e as Error).message
+          item = {
+            id: '',
+            runId,
+            apiId: target.id,
+            apiName: target.name,
+            status: 'error',
+            historyId: null,
+            timeMs: Date.now() - startedAt,
+            assertions: [],
+            logs: [],
+            error: message,
+            sortOrder: seq,
+            iteration,
+          }
+        }
+
+        const saved = tally(item)
+        seq += 1
+        steps += 1
+        lastSeq = seq
+
+        if (input.stopOnFail && saved.status !== 'passed' && saved.status !== 'skipped') {
+          state.stop = true
+        }
+        if (endIteration) break
+        if (input.delayMs && input.delayMs > 0 && !state.stop) {
+          await new Promise((r) => setTimeout(r, input.delayMs))
+        }
+        index = jumpTo ?? index + 1
       }
     }
 
     repos.runner.finishRun({ runId, passed, failed, skipped, report: { passed, failed, skipped } })
     this.active.delete(runId)
+    this.pending.delete(runId)
     this.deps.emit('event:runner-progress', {
       runId,
       item: {
@@ -213,7 +305,8 @@ export class RunnerFlow {
         assertions: [] as AssertionResult[],
         logs: [] as LogEntry[],
         error: null,
-        sortOrder: targets.length,
+        sortOrder: lastSeq,
+        iteration: iterationCount,
       },
       finished: true,
     } satisfies ProgressEvent)

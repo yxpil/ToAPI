@@ -29,6 +29,8 @@ export interface PmHost {
   pending: Promise<void>[]
   writes: Promise<void>[]
   errors: string[]
+  /** pm.execution.setNextRequest 的结果，worker 收尾时回传宿主 */
+  nextRequest: string | null | undefined
   skip: (reason?: string) => void
   subRequest: (call: SubRequestCall) => Promise<SubRequestResult>
   varWrite: (
@@ -122,10 +124,18 @@ export const buildPm = (host: PmHost): Dict => {
     collection: new Map(Object.entries(job.scopes.collection)),
   }
   const projectLayer = new Map(Object.entries(job.scopes.project))
+  const iterationLayer = new Map(Object.entries(job.iterationData))
   const lower = new Map<string, string>()
   const rebuild = (): void => {
     lower.clear()
-    for (const layer of [layers.global, projectLayer, layers.collection, layers.env])
+    // 优先级由低到高：global → project → collection → environment → iterationData（23 号文档 §5.1）
+    for (const layer of [
+      layers.global,
+      projectLayer,
+      layers.collection,
+      layers.env,
+      iterationLayer,
+    ])
       for (const [key, value] of layer) lower.set(key, value)
   }
   rebuild()
@@ -522,9 +532,9 @@ export const buildPm = (host: PmHost): Dict => {
     environment: scopeApi('env'),
     globals: scopeApi('global'),
     iterationData: {
-      get: (): undefined => undefined,
-      has: (): boolean => false,
-      toObject: (): Record<string, string> => ({}),
+      get: (key: string): string | undefined => iterationLayer.get(key),
+      has: (key: string): boolean => iterationLayer.has(key),
+      toObject: (): Record<string, string> => Object.fromEntries(iterationLayer),
     },
     expect,
   }
@@ -554,7 +564,7 @@ export const buildPm = (host: PmHost): Dict => {
     },
     toObject: (): Record<string, string> => Object.fromEntries(cookies),
     jar: (): never => {
-      throw new Error('pm.cookies.jar() 的异步域接口将在 B2 提供')
+      throw new Error('pm.cookies.jar() 的异步域接口未提供，请改用 pm.cookies.get / set / unset')
     },
   }
 
@@ -693,8 +703,13 @@ export const buildPm = (host: PmHost): Dict => {
   pm['sendRequest'] = sendRequest
 
   pm['execution'] = {
-    setNextRequest: (): void => {
-      throw new Error('pm.execution.setNextRequest 在 Runner 内生效，数据驱动能力由 B2 提供')
+    setNextRequest: (target?: string | null): void => {
+      if (!job.runner) {
+        host.log('warn', 'pm.execution.setNextRequest 只在集合 Runner / CLI 内生效，本次调用已忽略')
+        return
+      }
+      // 未传参等同 null：结束本轮迭代（Postman 语义）
+      host.nextRequest = target === undefined || target === null ? null : String(target)
     },
     skipRequest: (reason?: string): void => host.skip(reason ?? 'skipped by script'),
   }

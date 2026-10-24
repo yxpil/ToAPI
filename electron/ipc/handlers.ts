@@ -3,6 +3,7 @@ import { IpcErrorRaised } from '@shared/types'
 import type { Repos } from '../db/repo'
 import type { RequestFlow } from '../flow/request'
 import type { RunnerFlow } from '../flow/runner'
+import { parseDataAuto } from '../flow/data-file'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import type { PostmanService } from '../postman/service'
 import { midpoint } from '../db/repo/rows'
@@ -194,6 +195,7 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     },
     'runner:get': (req) => must(deps.repos.runner.get(req.id), '运行记录'),
     'runner:list': (req) => deps.repos.runner.list(req.limit ?? 20),
+    'data:parse': (req) => parseDataAuto(req.content),
 
     'postman:inspect': (req) => deps.postman.inspect(req),
     'postman:import': (req) => deps.postman.importCollection(req),

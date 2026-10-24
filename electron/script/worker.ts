@@ -8,7 +8,7 @@ import { v4 as uuidv4, v7 as uuidv7 } from 'uuid'
 import type { FakeConfig } from '@shared/types'
 import { dynamicVar } from '../postman/dynamic-vars'
 import { expect } from './expect'
-import { buildPm, type PmTestResult } from './pm'
+import { buildPm, type PmHost, type PmTestResult } from './pm'
 import type {
   HostToWorker,
   ScriptJob,
@@ -242,7 +242,7 @@ async function run(job: ScriptJob): Promise<void> {
     skip: undefined,
   }
 
-  const pm = buildPm({
+  const host: PmHost = {
     job,
     request: state.request,
     local: state.local,
@@ -250,6 +250,7 @@ async function run(job: ScriptJob): Promise<void> {
     pending: state.pending,
     writes: state.writes,
     errors: state.errors,
+    nextRequest: undefined,
     skip: (reason?: string) => {
       state.skip = reason ?? 'skipped by script'
     },
@@ -258,7 +259,8 @@ async function run(job: ScriptJob): Promise<void> {
     varUnset,
     cookieWrite,
     log: (level, text) => post({ type: 'log', level, text }),
-  })
+  }
+  const pm = buildPm(host)
 
   // 沙箱库在启动时注入（23 号文档 §4.4），不暴露 require / process / 文件系统
   const sandbox = {
@@ -321,6 +323,7 @@ async function run(job: ScriptJob): Promise<void> {
     skip: state.skip,
     runtimeWrites: Object.fromEntries(state.runtime),
     localWrites: Object.fromEntries(state.local),
+    ...(host.nextRequest === undefined ? {} : { nextRequest: host.nextRequest }),
     assertions: state.assertions,
   })
 }

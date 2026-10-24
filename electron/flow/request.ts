@@ -84,6 +84,14 @@ interface RunCtx {
   subCount: number
   cancelId: string
   projectId: string
+  /** 数据驱动：当前迭代的数据行，优先级高于 environment、低于 local（23 号文档 §5.1） */
+  iterationData?: Record<string, string>
+  iteration: number
+  iterationCount: number
+  /** 仅 Runner/CLI 内 pm.execution.setNextRequest 生效 */
+  runner?: boolean
+  /** CLI --timeout 覆盖接口自身的超时设置 */
+  timeoutMs?: number
 }
 
 const rowsToRecord = (rows: KvRow[]): Record<string, string> => {
@@ -205,8 +213,12 @@ export class RequestFlow {
     return { globals, project, collection, environment, local: Object.fromEntries(local) }
   }
 
-  /** 合并顺序即优先级：全局 → 项目根 → 集合链由外到内 → 环境 → runtime（23 号文档 §3.1） */
-  private mergedVars(target: ResolvedTarget, local?: Map<string, string>): Map<string, string> {
+  /** 合并顺序即优先级：全局 → 项目根 → 集合链由外到内 → 环境 → 数据行 → local → runtime（23 号文档 §3.1 / §5.1） */
+  private mergedVars(
+    target: ResolvedTarget,
+    local?: Map<string, string>,
+    iterationData?: Record<string, string>,
+  ): Map<string, string> {
     const merged = new Map<string, string>()
     const scopes = this.scopeSnapshot(target, local ?? new Map())
     for (const group of [
@@ -214,6 +226,7 @@ export class RequestFlow {
       scopes.project,
       scopes.collection,
       scopes.environment,
+      iterationData ?? {},
       scopes.local,
     ]) {
       for (const [k, v] of Object.entries(group)) merged.set(k, v)
@@ -223,8 +236,12 @@ export class RequestFlow {
   }
 
   /** local 优先级最高；静态变量未命中时再取动态变量（23 号文档 §4.5） */
-  private varLookup(target: ResolvedTarget, local?: Map<string, string>): VarLookup {
-    const merged = this.mergedVars(target)
+  private varLookup(
+    target: ResolvedTarget,
+    local?: Map<string, string>,
+    iterationData?: Record<string, string>,
+  ): VarLookup {
+    const merged = this.mergedVars(target, undefined, iterationData)
     return { get: (name) => local?.get(name) ?? merged.get(name) ?? dynamicVar(name) }
   }
 
@@ -388,6 +405,11 @@ export class RequestFlow {
       subCount: 0,
       cancelId: input.cancelId,
       projectId: target.projectId,
+      iteration: input.iteration ?? 1,
+      iterationCount: input.iterationCount ?? 1,
+      ...(input.iterationData ? { iterationData: input.iterationData } : {}),
+      ...(input.runner ? { runner: true } : {}),
+      ...(input.timeoutMs ? { timeoutMs: input.timeoutMs } : {}),
     })
   }
 
@@ -447,7 +469,7 @@ export class RequestFlow {
   }
 
   private async runTarget(target: ResolvedTarget, ctx: RunCtx): Promise<SendResult> {
-    let lookup = this.varLookup(target)
+    let lookup = this.varLookup(target, undefined, ctx.iterationData)
     let fake = RequestFlow.mergeFake(target.project, target.fake)
     let url = this.buildUrl(target, lookup)
     let bodyText = resolveVars(target.body, lookup).text
@@ -458,6 +480,8 @@ export class RequestFlow {
     const localVars = new Map<string, string>()
     const preLogs: LogEntry[] = []
     const preAssertions: AssertionResult[] = []
+    let nextRequest: string | null | undefined
+    const iterationData = ctx.iterationData ?? {}
 
     if (this.deps.script) {
       for (const code of target.preScripts) {
@@ -473,13 +497,15 @@ export class RequestFlow {
               body: bodyText,
               bodyType,
             },
-            vars: Object.fromEntries(this.mergedVars(target, localVars)),
+            vars: Object.fromEntries(this.mergedVars(target, localVars, iterationData)),
             scopes: this.scopeSnapshot(target, localVars),
             cookies: target.projectId ? this.jarFor(target.projectId).list(url) : [],
             requestName: target.requestName,
             requestId: target.apiId,
-            iteration: 1,
-            iterationCount: 1,
+            iteration: ctx.iteration,
+            iterationCount: ctx.iterationCount,
+            iterationData,
+            runner: ctx.runner === true,
             collectionId: target.collectionId,
             projectId: target.projectId,
             auth: workingAuth,
@@ -494,6 +520,7 @@ export class RequestFlow {
         )
         preLogs.push(...outcome.logs)
         preAssertions.push(...outcome.assertions)
+        if (outcome.nextRequest !== undefined) nextRequest = outcome.nextRequest
         for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
           this.runtimeFor(target.projectId).set(k, v)
         }
@@ -539,7 +566,7 @@ export class RequestFlow {
     }
 
     // Header 在伪装补丁与前置脚本之后重算，保证 local 变量与 toapi.fake 真实落线
-    lookup = this.varLookup(target, localVars)
+    lookup = this.varLookup(target, localVars, iterationData)
     const headers = this.buildHeaders(
       { ...target, headers: workingRows, auth: workingAuth },
       lookup,
@@ -564,6 +591,8 @@ export class RequestFlow {
     }
 
     const transport = RequestFlow.transportOf(fake)
+    // Runner/CLI 的 --timeout 覆盖接口自身设置（23 号文档 §5.3）
+    if (ctx.timeoutMs) transport.timeoutMs = ctx.timeoutMs
     const engineRequest: EngineRequest = { ...finalRequest, transport }
     const controller = this.deps.cancel.create(ctx.cancelId)
     this.deps.emit('event:send-progress', { cancelId: ctx.cancelId, phase: 'sending' })
@@ -620,9 +649,13 @@ export class RequestFlow {
       ...(inline ? { bodyText: responseBody } : { bodyPath }),
     }
 
-    const extracted = this.applyExtractors(target.extractors, res, target.projectId)
+    const extraction = this.applyExtractors(target.extractors, res, target.projectId)
     const postLogs: LogEntry[] = []
     const assertions: AssertionResult[] = []
+    // Runner/CLI 场景下提取器未命中即链路断裂，按失败断言呈现（23 号文档 §5.2）
+    if (ctx.runner)
+      for (const name of extraction.misses)
+        assertions.push({ name: `提取器 ${name}`, pass: false, error: '未命中' })
 
     const cookieUrl = res.finalUrl || url
     if (this.deps.script) {
@@ -646,13 +679,15 @@ export class RequestFlow {
               body: inline ? responseBody : responseBody.slice(0, INLINE_BODY_LIMIT),
               timeMs: res.timeMs,
             },
-            vars: Object.fromEntries(this.mergedVars(target, localVars)),
+            vars: Object.fromEntries(this.mergedVars(target, localVars, iterationData)),
             scopes: this.scopeSnapshot(target, localVars),
             cookies: target.projectId ? this.jarFor(target.projectId).list(cookieUrl) : [],
             requestName: target.requestName,
             requestId: target.apiId,
-            iteration: 1,
-            iterationCount: 1,
+            iteration: ctx.iteration,
+            iterationCount: ctx.iterationCount,
+            iterationData,
+            runner: ctx.runner === true,
             collectionId: target.collectionId,
             projectId: target.projectId,
             auth: workingAuth,
@@ -667,6 +702,7 @@ export class RequestFlow {
         )
         postLogs.push(...outcome.logs)
         assertions.push(...outcome.assertions)
+        if (outcome.nextRequest !== undefined) nextRequest = outcome.nextRequest
         for (const [k, v] of Object.entries(outcome.runtimeWrites)) {
           this.runtimeFor(target.projectId).set(k, v)
         }
@@ -681,9 +717,10 @@ export class RequestFlow {
       finalRequest,
       response,
       script: { preLogs, postLogs, assertions: [...preAssertions, ...assertions] },
-      extracted,
+      extracted: extraction.values,
       historyId: historyRow.id,
       skipped: false,
+      ...(ctx.runner && nextRequest !== undefined ? { nextRequest } : {}),
     }
   }
 
@@ -764,8 +801,8 @@ export class RequestFlow {
     extractors: Extractor[],
     res: EngineResponse,
     projectId: string,
-  ): ExtractedValue[] {
-    if (extractors.length === 0) return []
+  ): { values: ExtractedValue[]; misses: string[] } {
+    if (extractors.length === 0) return { values: [], misses: [] }
     const outcomes = runAll(extractors, {
       status: res.status,
       headers: res.headers,
@@ -773,8 +810,12 @@ export class RequestFlow {
     })
     const envId = projectId ? (this.deps.repos.environment.activeFor(projectId)?.id ?? null) : null
     const values: ExtractedValue[] = []
+    const misses: string[] = []
     for (const o of outcomes) {
-      if (!o.hit) continue
+      if (!o.hit) {
+        misses.push(o.name)
+        continue
+      }
       if (o.scope === 'runtime') {
         this.runtimeFor(projectId).set(o.name, o.value)
       } else if (o.scope === 'env' && envId) {
@@ -789,6 +830,6 @@ export class RequestFlow {
       }
       values.push({ name: o.name, scope: o.scope, valuePreview: preview(o.value) })
     }
-    return values
+    return { values, misses }
   }
 }

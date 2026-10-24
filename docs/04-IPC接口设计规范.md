@@ -53,16 +53,17 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `api:update` | `{id, ...partial}` | `ApiDetail` |
 | `api:duplicate` | `{id, targetCollectionId?}` | `ApiDetail` |
 | `api:delete` | `{id}` | `{}` |
-| `api:send` | `{apiId?, draft?, envId?, cancelId}` | `SendResult`（见 §4） |
+| `api:send` | `{apiId?, draft?, envId?, cancelId, iterationData?, iteration?, iterationCount?, runner?, timeoutMs?}` | `SendResult`（见 §4） |
 | `api:cancel` | `{cancelId}` | `{}` |
 
 > `api:send` 支持两种模式：传 `apiId` 发已保存接口；传 `draft` 发未保存的临时请求（如 cURL 导入预览）。
 > `api:update` 的 `url` 允许为空串：新建接口先存草稿、后补 URL 是正常路径；发送时由 `buildUrl` 返回 `VALIDATION`（`URL 必须以 http:// 或 https:// 开头`）。`draft.url` 仍要求非空。
+> `iterationData / iteration / iterationCount / runner / timeoutMs` 只由 Runner 与无头 CLI 注入（23 号文档 §5）：`iterationData` 参与插值时高于环境变量、低于 local；`runner:true` 才允许 `pm.execution.setNextRequest`，单次发送调用它只记一条警告日志；`SendResult.nextRequest` 仅在 Runner 上下文回传。
 
 ### 3.3 变量与环境
 | Channel | 入参 | 返回 |
 |---|---|---|
-| `env:list` | `{projectId}` | `Environment[]`（含 variables） |
+| `env:list` | `{projectId}` | `{envs: Environment[], vars: Variable[]}`（环境清单 + 该环境下的变量行） |
 | `env:create / env:update / env:delete` | 常规 | |
 | `env:activate` | `{projectId, environmentId}` | `{}` |
 | `var:set` | `{scope, environmentId?, key, value, secret?}` | `{}` |
@@ -74,17 +75,21 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `history:list` | `{projectId?, apiId?, cursor?, limit}` | `{items, nextCursor}`（游标分页，禁止 offset） |
 | `history:get` | `{id}` | 完整含 body |
 | `history:clear` | `{projectId?, beforeTs?}` | `{deleted}` |
-| `runner:start` | `{scopeType:'collection'\|'api', scopeId, envId?, cancelId, stopOnFail?, delayMs?}` | `{runId, total}`（结果走事件推送） |
+| `runner:start` | `{scopeType:'collection'\|'api'\|'project', scopeId, envId?, cancelId, stopOnFail?, delayMs?, iterationData?, iterationCount?, timeoutMs?}` | `{runId, total}`（`total` = 接口数 × 迭代数，结果走事件推送） |
 | `runner:cancel` | `{runId}` | `{}` |
 | `runner:get` | `{id}` | `RunnerRunView`（含逐项与断言） |
 | `runner:list` | `{limit?}` | `Omit<RunnerRunView,'items'>[]` |
+| `data:parse` | `{content}` | `{rows: Record<string,string>[], format:'csv'\|'json'}`（Runner 数据行解析；渲染进程无 fs 权限，粘贴文本只在主进程解析，23 号文档 §5.1） |
 | `runner:report` | `{runId, format:'html'\|'json'}` | `{filePath}`（**待实现**，M5） |
+
+> 无头 CLI `toapi run` 不走 IPC：它直接 `createKernel()` 后调用 `RunnerFlow`（23 号文档 §5.3）。同一套进程内入口也用于 Local HTTP API / MCP（11 号文档），三者共用 `kernel`，不复制业务逻辑。
 
 ### 3.5 协作与代码（详见 08 / 09 / 10 号文档）
 | Channel | 入参 | 返回 |
 |---|---|---|
 | `tapi:export / tapi:inspect / tapi:import` | 见 08 号文档 §7 | |
 | `postman:inspect / postman:import / postman:export-collection / postman:import-environment / postman:export-environment` | 见 23 号文档 §8 | |
+| `apifox:inspect / apifox:import / apifox:export`（**B4 规划**，前置条件：用户提供真实 Apifox 导出样本） | 见 23 号文档 §7.1 / §8 | |
 | `case:run` / `codegen:from-api` / `codegen:to-api` / `testgen:from-history` / `python:detect` | 见 09 号文档 §7 | |
 | `md:interpret` / `md:open` / `md:run` / `md:sync` | 见 10 号文档 §2.3 / §4 / §5 | |
 | `open:get-config` / `open:set-config` / `open:rotate-token` / `open:list-clients` / `open:revoke-client` / `open:call-log` | 见 11 号文档 §6 | |

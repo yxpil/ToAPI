@@ -1119,6 +1119,23 @@ select option::checkmark {
   padding: 0;
   overflow: auto;
 }
+/* 数据驱动（06 号文档 §3.6）：粘贴数据行 + 迭代次数，无底色块 */
+.runner-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.runner-data-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.runner-data-row .meta {
+  margin-left: auto;
+}
 
 /* ── 右键菜单（06 号文档 §3.4）── */
 .context-menu {

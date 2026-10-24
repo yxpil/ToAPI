@@ -4,6 +4,8 @@ import type { AddressInfo } from 'node:net'
 export interface CapturedRequest {
   method: string
   path: string
+  /** 完整查询串（含前导 ?），用于验证插值与数据行注入 */
+  search: string
   /** 原始顺序的头，用于验证伪装语义（07 号文档 §2.2） */
   rawHeaders: string[]
   body: string
@@ -34,6 +36,7 @@ export async function startRange(): Promise<Range> {
     requests.push({
       method: req.method ?? 'GET',
       path: url.pathname,
+      search: url.search,
       rawHeaders: req.rawHeaders,
       body,
     })
