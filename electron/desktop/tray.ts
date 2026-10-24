@@ -1,5 +1,12 @@
 // @author yxpil
-import { Menu, Notification, Tray, nativeImage, type BrowserWindow } from 'electron'
+import {
+  Menu,
+  Notification,
+  Tray,
+  powerSaveBlocker,
+  nativeImage,
+  type BrowserWindow,
+} from 'electron'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Kernel } from '../kernel'
@@ -66,9 +73,25 @@ export function createDesktop(options: Options): Desktop {
     log.error(`托盘创建失败：${(e as Error).message}`)
   }
 
+  /**
+   * macOS 在窗口隐藏后会对应用做 App Nap，主进程的定时器被降频到分钟级，
+   * 定时回归就不再准点；收进托盘期间显式阻止挂起，唤回窗口后立刻放开。
+   */
+  let napBlocker: number | null = null
+  const blockAppNap = (): void => {
+    if (napBlocker !== null || process.platform !== 'darwin') return
+    napBlocker = powerSaveBlocker.start('prevent-app-suspension')
+  }
+  const releaseAppNap = (): void => {
+    if (napBlocker === null) return
+    powerSaveBlocker.stop(napBlocker)
+    napBlocker = null
+  }
+
   const showWindow = (): void => {
     const win = options.getWindow()
     if (!win) return
+    releaseAppNap()
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
@@ -138,6 +161,7 @@ export function createDesktop(options: Options): Desktop {
     if (options.isQuitting()) return
     if (!options.kernel.notify.settings().closeToTray) return
     event.preventDefault()
+    blockAppNap()
     win.hide()
     refresh()
   })
@@ -150,6 +174,7 @@ export function createDesktop(options: Options): Desktop {
     showNotification,
     refresh,
     dispose: () => {
+      releaseAppNap()
       tray?.destroy()
       tray = null
     },
