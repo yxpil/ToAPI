@@ -7,6 +7,7 @@ import type { RunnerFlow } from '../flow/runner'
 import { parseDataAuto } from '../flow/data-file'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import type { PostmanService } from '../postman/service'
+import type { TapiService } from '../tapi/service'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
 
@@ -23,6 +24,7 @@ export interface HandlerDeps {
   flow: RequestFlow
   runner: RunnerFlow
   postman: PostmanService
+  tapi: TapiService
   cancel: CancelRegistry
   hello: AppHello
   /** 每次握手实时读取，底栏显示当前库大小（06 号文档 §4） */
@@ -203,6 +205,10 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     'postman:export-collection': (req) => deps.postman.exportCollection(req),
     'postman:import-environment': (req) => deps.postman.importEnvironment(req),
     'postman:export-environment': (req) => deps.postman.exportEnvironment(req),
+
+    'tapi:export': (req) => deps.tapi.export(req),
+    'tapi:inspect': (req) => deps.tapi.inspect(req),
+    'tapi:import': (req) => deps.tapi.import(req),
 
     'window:get-state': () => ({ maximized: win.isMaximized() }),
     'window:minimize': () => {

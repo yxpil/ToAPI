@@ -14,6 +14,7 @@ import { EditorPane } from './features/editor/EditorPane'
 import { ResponsePane } from './features/response/ResponsePane'
 import { RunnerPane } from './features/runner/RunnerPane'
 import { PostmanImport } from './features/postman/PostmanImport'
+import { TapiImport } from './features/tapi/TapiImport'
 import { Icon } from './components/Icon'
 import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
@@ -196,6 +197,8 @@ export default function App() {
     sendPending,
     postmanImportOpen,
     closePostmanImport,
+    tapiImportOpen,
+    closeTapiImport,
     activeProjectId,
   } = useApp()
   const [hello, setHello] = useState<AppHello | null>(null)
@@ -409,6 +412,8 @@ export default function App() {
         projectId={activeProjectId}
         onClose={closePostmanImport}
       />
+
+      <TapiImport open={tapiImportOpen} onClose={closeTapiImport} />
 
       {toast && (
         <div className={`toast${toast.kind === 'error' ? ' error' : ''}`} role="status">

@@ -92,13 +92,13 @@
 |---|---|
 | 剔除敏感变量（默认） | `secret=1` 的变量 `value` 置空、`redacted: true`，导入方 UI 高亮提示"需自行填写" |
 | 携带敏感变量 | 明文写入，导出前二次确认弹窗，文件头加 `"contains_secrets": true` 醒目提示 |
-| 加密携带 | AES-256-GCM，密码导出时设置；导入方输入密码解密，密文存 `value_enc` |
+| 加密携带 | **规划中**：AES-256-GCM，密码导出时设置；导入方输入密码解密，密文存 `value_enc`。当前版本不提供加密导出，UI 与通道只给「剔除 / 明文」两选 |
 
 > 历史记录、Runner 记录、Cookie Jar **永不导出** —— TAPI 只携带"定义"，不携带"数据"。
 
 ## 5. 导入策略
 
-导入入口：拖文件进窗口 / 菜单导入 / `tapi:import` channel。
+导入入口：项目右键「导入 .tapi…」打开对话框（选择本地文件或粘贴内容）→ `tapi:inspect` 预览 → 选策略 → `tapi:import` 落库。拖文件进窗口尚未接入（见 §9）。
 
 | 冲突 | 策略（用户可选，默认第一项） |
 |---|---|
@@ -122,12 +122,32 @@ checksum  = "sha256:" + hex(sha256(utf8(canonical)))
 
 | Channel | 入参 | 返回 |
 |---|---|---|
-| `tapi:export` | `{projectId, scope?: {collectionIds?}, secrets:'strip'\|'plain'\|'encrypt', password?, filePath}` | `{filePath, stats:{apis, collections, cases}}` |
-| `tapi:inspect` | `{filePath}` | `{meta, stats, containsSecrets, supported}`（导入预览，不写库） |
-| `tapi:import` | `{filePath, strategy, password?}` | `{projectId, imported, skipped}` |
+| `tapi:export` | `{projectId, collectionIds?, secrets:'strip'\|'plain'='strip', name?, description?, filePath?}` | `{filePath, stats:{collections,apis,environments,globals}, containsSecrets}`；无 `filePath` 时走主进程保存对话框，取消返回 `CANCELLED` |
+
+| `tapi:inspect` | `{content \| filePath}` | `TapiInspection`（`supported / checksumOk / containsSecrets / redactedCount / stats / sameNameProjectId`，不写库） |
+| `tapi:import` | `{content \| filePath, mode:'new'\|'into'='new', targetProjectId?, apiConflict:'skip'\|'overwrite'\|'duplicate'='skip'}` | `{projectId, projectName, imported, skipped, warnings[], inspection}` |
+
+- `secrets:'plain'` 且文件含明文密钥时 `meta.contains_secrets=true`，导出返回值里的 `containsSecrets` 供 UI 二次确认；默认 `strip` 一律不落明文。
+- `checksum` 不匹配直接拒绝导入（错误信息说明可能是传输被修改），缺省字段（旧文件无 checksum）降级为跳过校验。
+- `format_version` 高于本应用支持范围 → 拒绝并提示升级（08 号文档 §5）。
+- 无窗口环境（集成测试、CLI、开放通道）没有对话框：导出必须显式给 `filePath`，导入必须给 `content` 或 `filePath`。
 
 ## 8. 与 Git 协作的建议用法
 
 - `.tapi` 文件可直接进部门间共享仓库，格式化 JSON 保证 diff 可读。
 - 敏感变量走"剔除"导出 + 接收方本地环境补齐，仓库里永不落明文密钥。
 - 建议在文件名携带日期与环境：`订单中心-staging-20261023.tapi`。
+
+## 9. 实现状态（M5.5，2026-10-24）
+
+代码位置：`electron/tapi/format.ts`（类型 + 规范化 JSON + SHA-256 校验和）、`export.ts`、`import.ts`（策略与事务）、`service.ts`（读写盘与对话框）；通道见 §7，实现在 `electron/ipc/handlers.ts`。
+
+| 能力 | 状态 |
+|---|---|
+| 导出（整项目 / 指定集合子树）、剔除或明文携带敏感变量、checksum | 已实现 |
+| 导入预览（版本支持、checksum、剔除数、同名项目）、新建 / 合并两种策略、接口按「方法+URL+名称」判重（跳过 / 覆盖 / 保留两份）、全程事务回滚 | 已实现 |
+| `toapi run project.tapi`：把 `.tapi` 导入临时库后直接跑（CI 用同一入口） | 已实现 |
+| 加密携带（`value_enc`） | 未实现，见 §4 |
+| `payload.cases`（测试案例随文件传递） | 未实现 —— 案例表随 09 号文档落地后才填；当前导出固定为空数组 |
+| 拖拽文件进窗口导入 | 未实现，当前入口是项目右键「导出 .tapi… / 导入 .tapi…」与工具栏导入对话框 |
+| 历史记录 / Runner 结果 / Cookie 导出 | 明确不做（§4 尾注） |

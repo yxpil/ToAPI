@@ -329,7 +329,9 @@ export function TreePane() {
     selectApi,
     moveNode,
     openPostmanImport,
+    openTapiImport,
     exportCollection,
+    exportTapi,
   } = useApp()
   const [name, setName] = useState('')
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -357,6 +359,11 @@ export function TreePane() {
         { label: '新建集合', onSelect: () => void createCollection('新集合') },
         { label: '新建接口', onSelect: () => void createApi('新接口') },
         { label: '导入 Postman…', onSelect: openPostmanImport },
+        { label: '导入 .tapi…', onSelect: openTapiImport },
+        {
+          label: '导出为 .tapi…',
+          onSelect: () => void exportTapi(state.node.project.id),
+        },
         {
           label: '导出为 Postman Collection…',
           onSelect: () => void exportCollection(state.node.project.id),
@@ -395,6 +402,10 @@ export function TreePane() {
         {
           label: '导出为 Postman Collection…',
           onSelect: () => void exportCollection(state.projectId, [state.node.id]),
+        },
+        {
+          label: '导出该集合为 .tapi…',
+          onSelect: () => void exportTapi(state.projectId, [state.node.id]),
         },
         {
           label: '重命名集合',

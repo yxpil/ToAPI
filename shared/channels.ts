@@ -260,6 +260,67 @@ export interface PostmanExportEnvironmentInput {
   filePath?: string
 }
 
+// ── .tapi 项目互传（08 号文档 §7）──
+
+export interface TapiStats {
+  collections: number
+  apis: number
+  environments: number
+  globals: number
+}
+
+export interface TapiSource {
+  content?: string
+  filePath?: string
+}
+
+/** 导入预览：不写库，供 UI 决定策略（08 号文档 §5） */
+export interface TapiInspection {
+  name: string
+  description?: string
+  appVersion: string
+  exportedAt: number
+  formatVersion: string
+  supported: boolean
+  checksumOk: boolean
+  containsSecrets: boolean
+  /** 被剔除的敏感变量个数，导入后需自行填写 */
+  redactedCount: number
+  stats: TapiStats
+  sameNameProjectId: string | null
+  sameNameProject: string | null
+}
+
+export interface TapiExportInput {
+  projectId: string
+  collectionIds?: string[]
+  secrets?: 'strip' | 'plain'
+  name?: string
+  description?: string
+  filePath?: string
+}
+
+export interface TapiExportResult {
+  filePath: string
+  stats: TapiStats
+  containsSecrets: boolean
+}
+
+export interface TapiImportInput extends TapiSource {
+  mode?: 'new' | 'into'
+  targetProjectId?: string
+  apiConflict?: 'skip' | 'overwrite' | 'duplicate'
+}
+
+export interface TapiImportResult {
+  projectId: string
+  projectName: string
+  imported: TapiStats
+  skipped: number
+  warnings: string[]
+  inspection: TapiInspection
+}
+
 // ── channel → 载荷映射（18 号文档 §1.2）──
 
 export interface ChannelMap {
@@ -306,6 +367,9 @@ export interface ChannelMap {
     req: PostmanExportEnvironmentInput
     res: PostmanExportResult
   }
+  'tapi:export': { req: TapiExportInput; res: TapiExportResult }
+  'tapi:inspect': { req: TapiSource; res: TapiInspection }
+  'tapi:import': { req: TapiImportInput; res: TapiImportResult }
   'window:get-state': { req: Record<string, never>; res: WindowState }
   'window:minimize': { req: Record<string, never>; res: void }
   'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
@@ -356,6 +420,9 @@ export const CHANNELS = [
   'postman:export-collection',
   'postman:import-environment',
   'postman:export-environment',
+  'tapi:export',
+  'tapi:inspect',
+  'tapi:import',
   'window:get-state',
   'window:minimize',
   'window:toggle-maximize',

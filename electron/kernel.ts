@@ -10,6 +10,7 @@ import { RequestFlow } from './flow/request'
 import { RunnerFlow } from './flow/runner'
 import { ScriptVM } from './script/vm'
 import { PostmanService, type PostmanDialogs } from './postman/service'
+import { TapiService, type TapiDialogs } from './tapi/service'
 import { channelsHashOf, type HandlerMap } from './ipc/router'
 import { buildHandlers, type WindowControls } from './ipc/handlers'
 import type { AppHello, ChannelName, EventName, EventPayload, ReqOf, ResOf } from '@shared/channels'
@@ -24,6 +25,7 @@ export interface Kernel {
   script: ScriptVM | null
   files: FileStore
   postman: PostmanService
+  tapi: TapiService
   hello: AppHello
   handlers: HandlerMap
   invoke: <K extends ChannelName>(channel: K, req: ReqOf<K>) => Promise<ResOf<K>>
@@ -42,8 +44,8 @@ export interface KernelOptions {
   emit?: (channel: string, payload: unknown) => void
   /** 无边框窗口控制；无窗口场景不注入，window:* 通道为空实现 */
   window?: WindowControls
-  /** 导出文件保存对话框；无窗口场景不注入，仅支持显式 filePath */
-  dialogs?: PostmanDialogs
+  /** 导出文件保存 / 导入文件选择对话框；无窗口场景不注入，仅支持显式 filePath 与 content */
+  dialogs?: PostmanDialogs & TapiDialogs
 }
 
 /** 主进程能力内核：与 BrowserWindow / electron API 解耦，集成测试可直接驱动（17 号文档 §1） */
@@ -62,6 +64,12 @@ export function createKernel(options: KernelOptions): Kernel {
   const flow = new RequestFlow({ engine, files, cancel, repos, emit, script: script ?? undefined })
   const runner = new RunnerFlow({ repos, flow, cancel, emit })
   const postman = new PostmanService({ db, repos, dialogs: options.dialogs })
+  const tapi = new TapiService({
+    db,
+    repos,
+    appVersion: () => options.appVersion,
+    dialogs: options.dialogs,
+  })
 
   const dbSize = (): number => {
     if (options.dbPath === ':memory:') return 0
@@ -88,6 +96,7 @@ export function createKernel(options: KernelOptions): Kernel {
     hello,
     dbSize,
     postman,
+    tapi,
     window: options.window,
   })
 
@@ -104,6 +113,7 @@ export function createKernel(options: KernelOptions): Kernel {
     script,
     files,
     postman,
+    tapi,
     hello,
     handlers,
     invoke,

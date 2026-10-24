@@ -1,6 +1,7 @@
 // @author yxpil
 import { execFileSync, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +19,76 @@ mkdirSync(profile, { recursive: true })
 mkdirSync(resolve(root, '.tmp'), { recursive: true })
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** .tapi 夹具：与 08 号文档 §6 同一规范化算法，tamper=true 时故意让校验和失效 */
+const canonicalJson = (value) => {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (value && typeof value === 'object')
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
+      .join(',')}}`
+  return JSON.stringify(value ?? null)
+}
+
+const tapiFixture = (tamper = false) => {
+  const payload = {
+    project: {
+      name: '互传验收',
+      description: 'verify:flow 生成',
+      settings: {},
+      auth: { type: 'none' },
+      variables: [],
+      pre_script: '',
+      post_script: '',
+      collections: [
+        {
+          key: 'col-1',
+          name: '验收集合',
+          description: '',
+          auth: { type: 'bearer', token: '{{token}}' },
+          variables: [{ key: 'colKey', value: '', secret: true, enabled: true, redacted: true }],
+          pre_script: '',
+          post_script: '',
+          children: [],
+          apis: [
+            {
+              key: 'api-1',
+              name: '验收接口',
+              description: '',
+              method: 'GET',
+              url: '{{baseUrl}}/verify',
+              params: [],
+              headers: [],
+              body_type: 'none',
+              body: '',
+              auth: { type: 'inherit' },
+              fake: {},
+              pre_script: '',
+              post_script: '',
+              extractors: [],
+            },
+          ],
+        },
+      ],
+    },
+    environments: [],
+    globals: [],
+    cases: [],
+  }
+  const checksum = `sha256:${createHash('sha256').update(canonicalJson(payload), 'utf8').digest('hex')}`
+  if (tamper) payload.project.name = '互传验收（被改过）'
+  return JSON.stringify(
+    {
+      format: 'tapi',
+      format_version: '1.0',
+      meta: { exported_at: Date.now(), app_version: APP_VERSION, name: '互传验收', checksum },
+      payload,
+    },
+    null,
+    2,
+  )
+}
 
 // 靶场：回显收到的请求，用于断言线上真实行为
 const echo = createServer((req, res) => {
@@ -558,6 +629,109 @@ try {
   }
   await app.js(`window.__h.key('Escape')`)
   await app.waitFor(`!document.querySelector('[data-testid="context-menu"]')`, '集合菜单关闭')
+
+  // ── .tapi 导入（08 号文档 §5、06 号文档 §3.7b）──
+  await app.js(`(() => {
+    const row = document.querySelector('[data-testid^="project-"]')
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 260, clientY: 200 }))
+    return true
+  })()`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="context-menu"]')`,
+    '项目右键菜单（.tapi）',
+  )
+  report.projectMenu = await app.js(
+    `[...document.querySelectorAll('[data-testid="context-menu"] button')].map((b) => b.innerText)`,
+  )
+  for (const need of ['导入 .tapi…', '导出为 .tapi…']) {
+    if (!report.projectMenu.includes(need)) {
+      throw new Error(`项目菜单缺少 ${need}：${JSON.stringify(report.projectMenu)}`)
+    }
+  }
+  await app.js(
+    `[...document.querySelectorAll('[data-testid="context-menu"] button')]
+      .find((b) => b.innerText === '导入 .tapi…').click()`,
+  )
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="tapi-import"]')`,
+    '.tapi 导入对话框打开',
+  )
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="TAPI 内容"]'), ${JSON.stringify(tapiFixture(false))})`,
+  )
+  await app.waitFor(`!!document.querySelector('[data-testid="tapi-summary"]')`, '.tapi 预览出现')
+  report.tapiSummary = await app.js(
+    `document.querySelector('[data-testid="tapi-summary"]')?.innerText ?? null`,
+  )
+  if (
+    !String(report.tapiSummary).includes('1 集合') ||
+    !String(report.tapiSummary).includes('已剔除 1 个')
+  ) {
+    throw new Error(`.tapi 预览内容不符：${report.tapiSummary}`)
+  }
+  report.tapiImportEnabled = await app.js(
+    `!document.querySelector('[data-testid="tapi-import-ok"]')?.disabled`,
+  )
+  if (report.tapiImportEnabled !== true) throw new Error('合法 .tapi 的导入按钮应可用')
+  await app.js(`document.querySelector('[data-testid="tapi-import-ok"]').click()`)
+  await app.waitFor(
+    `document.querySelector('.toast')?.innerText.includes('导入完成')`,
+    '.tapi 导入 Toast',
+    15000,
+  )
+  report.tapiToast = await app.js(`document.querySelector('.toast')?.innerText ?? null`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="project-"] .label')].some((e) => e.innerText === '互传验收')`,
+    '导入的项目出现在项目树',
+  )
+
+  // 校验和被破坏的文件：红字提示 + 导入按钮禁用，不给强行导入的出口
+  await app.js(`(() => {
+    const row = document.querySelector('[data-testid^="project-"]')
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 260, clientY: 200 }))
+    return true
+  })()`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="context-menu"]')`,
+    '项目右键菜单（篡改）',
+  )
+  await app.js(
+    `[...document.querySelectorAll('[data-testid="context-menu"] button')]
+      .find((b) => b.innerText === '导入 .tapi…').click()`,
+  )
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="tapi-import"]')`,
+    '.tapi 对话框再次打开',
+  )
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="TAPI 内容"]'), ${JSON.stringify(tapiFixture(true))})`,
+  )
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="tapi-blocked"]')`,
+    '校验和不匹配提示出现',
+  )
+  report.tapiBlocked = await app.js(
+    `document.querySelector('[data-testid="tapi-blocked"]')?.innerText ?? null`,
+  )
+  report.tapiTamperDisabled = await app.js(
+    `document.querySelector('[data-testid="tapi-import-ok"]')?.disabled ?? null`,
+  )
+  if (report.tapiTamperDisabled !== true) throw new Error('校验和不匹配时导入按钮必须禁用')
+  await app.js(`document.querySelector('[data-testid="tapi-cancel"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="tapi-import"]')`, '.tapi 对话框关闭')
+
+  // 导回原项目，后面的快捷键与截图断言仍针对「订单中心」
+  await app.js(`(() => {
+    const row = [...document.querySelectorAll('[data-testid^="project-"]')]
+      .find((e) => e.innerText.includes('订单中心'))
+    row.click()
+    return true
+  })()`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="project-"]')].some((e) => e.innerText.includes('订单中心') && e.className.includes('selected'))`,
+    '切回订单中心项目',
+  )
+  await app.waitFor(`!!document.querySelector('[data-testid^="api-"]')`, '原项目接口树可见')
 
   // ── 树拖拽排序并持久化（07 号文档 §3）──
   await app.js(`window.__h.click('新建接口')`)

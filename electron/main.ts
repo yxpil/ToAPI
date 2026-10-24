@@ -85,10 +85,10 @@ void app.whenReady().then(() => {
       isMaximized: () => win?.isMaximized() ?? false,
     },
     dialogs: {
-      saveText: async (defaultName, content) => {
+      saveText: async (defaultName, content, filters) => {
         const result = await dialog.showSaveDialog({
           defaultPath: join(app.getPath('documents'), defaultName),
-          filters: [{ name: 'JSON', extensions: ['json'] }],
+          filters: [{ name: 'ToAPI', extensions: filters ?? ['json'] }],
         })
         if (result.canceled || !result.filePath) return null
         writeFileSync(result.filePath, content, 'utf8')

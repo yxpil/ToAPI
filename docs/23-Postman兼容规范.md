@@ -237,7 +237,7 @@ B1 必须通过：`to.equal / eql / deep.equal`、`to.be.true / false / null / u
 ### 5.3 CLI `toapi run`
 
 ```
-toapi run <postman_collection.json> \
+toapi run <postman_collection.json | project.tapi> \
   --env <environment.json|name> --globals <globals.json> \
   --data <data.csv|data.json> --iteration-count <n> \
   --collection <name|id> | --folder <name> \
@@ -254,7 +254,7 @@ toapi run --db <toapi.db> --project <name|id> [...同上]
 | 1 | 存在失败项 / 断言失败 / 脚本错误 |
 | 2 | 用法错误、文件不可读、导入失败、数据库不可写 |
 
-- 两种来源：**位置参数**导入 Postman Collection 到临时库跑完即弃（CI 用，绝不写用户数据）；**`--db`** 直接打开已有 ToAPI 库（位置参数与 `--db` 互斥）。`.tapi` 作为输入在 M5.5 落地前明确拒绝并给出提示，不做静默降级。
+- 两种来源：**位置参数**导入集合文件到临时库跑完即弃（CI 用，绝不写用户数据），支持 Postman Collection v2.1 与 `.tapi`（08 号文档）；**`--db`** 直接打开已有 ToAPI 库（位置参数与 `--db` 互斥）。
 - 环境可给文件（按 Postman Environment 导入后激活）或库内名称；`--globals` 接受 Postman Globals 导出或普通键值对象，落全局变量；数据行优先级高于同名全局变量。
 - CLI 与 GUI 共用 `kernel`（无窗口模式），Runner、变量、脚本、CookieJar 行为完全一致（17 号文档）；`runCli(argv)` 返回退出码而不 `process.exit`，`bin/toapi.cjs` 只负责落 exitCode，因此可被集成测试直接调用。
 - 运行在纯 Node（`node:sqlite`，要求 Node ≥ 24），不需要 Electron 运行时；报告导出缺省路径 `toapi-report.json` / `toapi-junit.xml` / `toapi-report.html`。

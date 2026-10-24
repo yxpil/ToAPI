@@ -66,10 +66,12 @@ const openKernel = (opts: CliOptions, tempDir: string, iterationCount: () => num
 }
 
 const importCollection = (kernel: Kernel, filePath: string): string => {
-  if (/\.tapi$/i.test(filePath))
-    throw new CliUsageError(
-      '.tapi 项目导入将在 M5.5 提供；当前请用 Postman Collection v2.1 JSON，或用 --db 打开已有数据库',
-    )
+  if (/\.tapi$/i.test(filePath)) {
+    const report = kernel.tapi.import({ filePath: resolvePath(filePath), mode: 'new' })
+    if (report.warnings.length > 0) out(`.tapi 导入提示 ${report.warnings.length} 条`)
+    out(`已导入 .tapi：${report.imported.collections} 集合 · ${report.imported.apis} 接口`)
+    return report.projectId
+  }
   const report = kernel.postman.importCollection({ filePath: resolvePath(filePath), mode: 'new' })
   if (report.warnings.length > 0) out(`导入警告 ${report.warnings.length} 条`)
   return report.projectId

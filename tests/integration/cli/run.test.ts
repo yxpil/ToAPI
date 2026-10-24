@@ -273,6 +273,47 @@ describe('toapi run（23 号文档 §5.3）', () => {
     ])
   })
 
+  it('位置参数也接受 .tapi：导入临时库后照常跑（08 号文档）', async () => {
+    const dbPath = join(dir, 'seed.db')
+    const kernel = createKernel({ dbPath, filesDir: dir, appVersion: 'test' })
+    const project = kernel.repos.project.create({ name: '互传源' })
+    const collection = kernel.repos.collection.create({ projectId: project.id, name: '集合' })
+    const env = kernel.repos.environment.create({ projectId: project.id, name: 'main' })
+    kernel.repos.environment.activate(project.id, env.id)
+    kernel.repos.variable.upsert({
+      scope: 'environment',
+      environmentId: env.id,
+      key: 'baseUrl',
+      value: range.origin,
+    })
+    const api = kernel.repos.api.create({
+      collectionId: collection.id,
+      name: 'Echo',
+      method: 'GET',
+      url: '{{baseUrl}}/echo',
+    })
+    kernel.repos.api.update(api.id, {
+      postScript: "toapi.test('状态 200', () => toapi.expect(toapi.response.status).toBe(200))",
+    })
+    const tapiPath = join(dir, 'bundle.tapi')
+    kernel.tapi.export({ projectId: project.id, filePath: tapiPath, secrets: 'strip' })
+    kernel.dispose()
+
+    const report = join(dir, 'tapi-run.json')
+    const code = await runCli([
+      'run',
+      tapiPath,
+      '--quiet',
+      '--reporters',
+      'json',
+      '--reporter-json-export',
+      report,
+    ])
+    expect(code).toBe(0)
+    const parsed = JSON.parse(readFileSync(report, 'utf8')) as ReportShape
+    expect(parsed.run.executions.map((e) => e.status)).toEqual(['passed'])
+  })
+
   it('--help 返回 0', async () => {
     expect(await runCli(['--help'])).toBe(0)
     expect(await runCli(['--version'])).toBe(0)

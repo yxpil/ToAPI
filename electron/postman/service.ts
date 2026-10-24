@@ -26,7 +26,7 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024
 
 export interface PostmanDialogs {
   /** 弹保存对话框并写盘；用户取消返回 null。仅 Electron 主进程注入 */
-  saveText: (defaultName: string, content: string) => Promise<string | null>
+  saveText: (defaultName: string, content: string, filters?: string[]) => Promise<string | null>
 }
 
 export interface PostmanServiceDeps {

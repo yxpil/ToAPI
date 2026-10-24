@@ -235,6 +235,33 @@ export const INPUT_SCHEMAS = {
     environmentId: idSchema,
     filePath: z.string().max(4096).optional(),
   }),
+  'tapi:export': z.object({
+    projectId: idSchema,
+    collectionIds: z.array(idSchema).max(500).optional(),
+    secrets: z.enum(['strip', 'plain']).optional(),
+    name: z.string().max(200).optional(),
+    description: z.string().max(4000).optional(),
+    filePath: z.string().max(4096).optional(),
+  }),
+  'tapi:inspect': z
+    .object({
+      content: z.string().max(50_000_000).optional(),
+      filePath: z.string().max(4096).optional(),
+    })
+    .refine((v) => Boolean(v.content) !== Boolean(v.filePath), {
+      message: 'content 与 filePath 必须二选一',
+    }),
+  'tapi:import': z
+    .object({
+      content: z.string().max(50_000_000).optional(),
+      filePath: z.string().max(4096).optional(),
+      mode: z.enum(['new', 'into']).optional(),
+      targetProjectId: idSchema.optional(),
+      apiConflict: z.enum(['skip', 'overwrite', 'duplicate']).optional(),
+    })
+    .refine((v) => Boolean(v.content) !== Boolean(v.filePath), {
+      message: 'content 与 filePath 必须二选一',
+    }),
   'window:get-state': empty,
   'window:minimize': empty,
   'window:toggle-maximize': empty,

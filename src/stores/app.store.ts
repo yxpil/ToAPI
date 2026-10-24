@@ -16,6 +16,9 @@ import type {
   PostmanImportEnvironmentInput,
   PostmanImportInput,
   PostmanSource,
+  TapiImportInput,
+  TapiImportResult,
+  TapiInspection,
 } from '@shared/channels'
 import { invoke, newCancelId } from '../lib/ipc'
 import { IpcFailure } from '../lib/ipc'
@@ -42,6 +45,7 @@ interface AppState {
   toast: Toast | null
   cancelId: string | null
   postmanImportOpen: boolean
+  tapiImportOpen: boolean
 
   boot(): Promise<void>
   refreshTree(): Promise<void>
@@ -71,6 +75,15 @@ interface AppState {
   exportEnvironment(environmentId: string): Promise<void>
   openPostmanImport(): void
   closePostmanImport(): void
+  exportTapi(
+    projectId: string,
+    collectionIds?: string[],
+    secrets?: 'strip' | 'plain',
+  ): Promise<void>
+  inspectTapi(source: { content?: string; filePath?: string }): Promise<TapiInspection | null>
+  openTapiImport(): void
+  closeTapiImport(): void
+  importTapiFile(input: TapiImportInput): Promise<TapiImportResult | null>
   dismissToast(): void
 }
 
@@ -139,6 +152,7 @@ export const useApp = create<AppState>((set, get) => {
     toast: null,
     cancelId: null,
     postmanImportOpen: false,
+    tapiImportOpen: false,
 
     async boot() {
       await get().refreshTree()
@@ -442,6 +456,62 @@ export const useApp = create<AppState>((set, get) => {
 
     closePostmanImport() {
       set({ postmanImportOpen: false })
+    },
+
+    async exportTapi(projectId, collectionIds, secrets) {
+      const result = await call(
+        invoke('tapi:export', {
+          projectId,
+          ...(collectionIds && collectionIds.length > 0 ? { collectionIds } : {}),
+          secrets: secrets ?? 'strip',
+        }),
+        (e) => {
+          if (e.code !== 'CANCELLED')
+            set({ toast: { kind: 'error', text: `${e.code}: ${e.message}` } })
+        },
+      )
+      if (!result) return
+      set({
+        toast: {
+          kind: 'ok',
+          text: `已导出 ${String(result.stats.apis)} 个接口到 ${result.filePath}${
+            result.containsSecrets ? '（含明文密钥，请勿外发）' : ''
+          }`,
+        },
+      })
+    },
+
+    async inspectTapi(source) {
+      const inspected = await call(invoke('tapi:inspect', source), (e) =>
+        set({ toast: { kind: 'error', text: e.message } }),
+      )
+      return inspected ?? null
+    },
+
+    openTapiImport() {
+      set({ tapiImportOpen: true })
+    },
+
+    closeTapiImport() {
+      set({ tapiImportOpen: false })
+    },
+
+    async importTapiFile(input) {
+      const report = await call(invoke('tapi:import', input), (e) =>
+        set({ toast: { kind: 'error', text: e.message } }),
+      )
+      if (!report) return null
+      set({ tapiImportOpen: false })
+      await get().refreshTree()
+      await get().selectProject(report.projectId)
+      const warn = report.warnings.length > 0 ? ` · ${String(report.warnings.length)} 条提示` : ''
+      set({
+        toast: {
+          kind: 'ok',
+          text: `导入完成：${String(report.imported.collections)} 集合 · ${String(report.imported.apis)} 接口 · 跳过 ${String(report.skipped)}${warn}`,
+        },
+      })
+      return report
     },
 
     dismissToast() {

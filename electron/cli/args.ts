@@ -30,7 +30,7 @@ const REPORTERS: ReporterKind[] = ['cli', 'json', 'junit', 'html']
 export const USAGE = `ToAPI CLI — 本地无头运行集合（23 号文档 §5.3）
 
 用法：
-  toapi run <postman_collection.json> [选项]
+  toapi run <postman_collection.json | project.tapi> [选项]
   toapi run --db <toapi.db> --project <名称|ID> [选项]
 
 选项：
