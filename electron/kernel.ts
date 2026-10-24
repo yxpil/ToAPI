@@ -17,6 +17,7 @@ import { LocalHttpApi } from './open/http-api'
 import { mcpOverHttp } from './open/mcp'
 import { NotifyService, type DesktopHooks } from './notify/service'
 import { ScheduleService } from './schedule/service'
+import { NodeService } from './node/service'
 import { channelsHashOf, type HandlerMap } from './ipc/router'
 import { buildHandlers, type WindowControls } from './ipc/handlers'
 import { IpcErrorRaised } from '@shared/types'
@@ -46,6 +47,7 @@ export interface Kernel {
   http: LocalHttpApi
   notify: NotifyService
   schedule: ScheduleService
+  node: NodeService
   /** 按配置起停 Local HTTP API；返回当前监听状态（11 号文档 §1.1） */
   syncOpenEndpoint: () => Promise<{ running: boolean; port: number }>
   hello: AppHello
@@ -131,6 +133,17 @@ export function createKernel(options: KernelOptions): Kernel {
     headless: options.headless,
     emit: (channel, payload) => emit(channel, payload),
   })
+  const node = new NodeService({
+    repos,
+    runner,
+    notify,
+    config: open.config,
+    isOpenRunning: () => open.view().running,
+    tapi,
+    appVersion: options.appVersion,
+    emit,
+    fetchImpl: options.fetchImpl,
+  })
   const http = new LocalHttpApi({
     service: open,
     appVersion: options.appVersion,
@@ -141,6 +154,8 @@ export function createKernel(options: KernelOptions): Kernel {
         secret,
         clientName: meta.clientName ?? meta.client,
       }),
+    onNode: (path, body, peer) => node.nodeServer().frame(path, body, peer),
+    onNodeHello: (peer) => node.nodeServer().hello(peer),
   })
 
   const syncOpenEndpoint = async (): Promise<{ running: boolean; port: number }> => {
@@ -194,6 +209,7 @@ export function createKernel(options: KernelOptions): Kernel {
     open,
     notify,
     schedule,
+    node,
     files,
     syncOpenEndpoint,
     window: options.window,
@@ -217,6 +233,7 @@ export function createKernel(options: KernelOptions): Kernel {
     http,
     notify,
     schedule,
+    node,
     syncOpenEndpoint,
     hello,
     handlers,

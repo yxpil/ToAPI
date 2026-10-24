@@ -69,7 +69,7 @@ export class RunnerRepo {
   constructor(private readonly db: Db) {}
 
   startRun(input: {
-    scopeType: 'collection' | 'api' | 'case' | 'project'
+    scopeType: 'collection' | 'api' | 'case' | 'project' | 'remote'
     scopeId: string
     scopeName: string
     envId: string | null

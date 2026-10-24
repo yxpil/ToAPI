@@ -147,6 +147,14 @@ export interface LocalHttpApiDeps {
   appVersion: string
   /** MCP Streamable HTTP 复用同一端口（11 号文档 §2.1） */
   onMcp?: (body: string, meta: CallMeta, secret: string | null) => Promise<unknown>
+  /** 节点协议（24 号文档 §2.3）：hello 明文拿盐，其余全部走加密帧 */
+  onNode?: (path: string, body: string, peer: string) => Promise<PlainReply>
+  onNodeHello?: (peer: string | null) => PlainReply
+}
+
+export interface PlainReply {
+  status: number
+  body: Record<string, unknown>
 }
 
 export class LocalHttpApi {
@@ -191,13 +199,17 @@ export class LocalHttpApi {
     return match?.[1]?.trim() ?? null
   }
 
+  /** 连接来源，节点协议用它做失败锁与审计主体 */
+  private peerOf(req: IncomingMessage): string {
+    return `${req.socket.remoteAddress ?? 'unknown'}:${req.socket.remotePort ?? 0}`
+  }
+
   private meta(req: IncomingMessage): CallMeta {
     const nameHeader = req.headers['x-client-name']
     const name = Array.isArray(nameHeader) ? nameHeader[0] : nameHeader
-    const peer = `${req.socket.remoteAddress ?? 'unknown'}:${(req.socket.remotePort ?? 0) | 0}`
     return {
       channel: 'http',
-      client: name ? `http:${name}` : `http:${peer}`,
+      client: name ? `http:${name}` : `http:${this.peerOf(req)}`,
       ...(name ? { clientName: name } : {}),
     }
   }
@@ -232,6 +244,28 @@ export class LocalHttpApi {
         },
         cors,
       )
+      return
+    }
+
+    if (url.pathname === '/v1/node/hello' && this.deps.onNodeHello) {
+      const reply = this.deps.onNodeHello(url.searchParams.get('deviceId'))
+      json(res, reply.status, reply.body, cors)
+      return
+    }
+
+    if (url.pathname.startsWith('/v1/node/') && this.deps.onNode) {
+      // 节点协议自带口令派生的加密与序号防重放，不再走 Bearer 明文比对
+      try {
+        const reply = await this.deps.onNode(url.pathname, await readBody(req), this.peerOf(req))
+        json(res, reply.status, reply.body, cors)
+      } catch (e) {
+        json(
+          res,
+          400,
+          { ok: false, error: { code: 'VALIDATION', message: (e as Error).message } },
+          cors,
+        )
+      }
       return
     }
 

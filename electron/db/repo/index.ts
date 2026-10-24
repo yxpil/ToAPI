@@ -6,6 +6,7 @@ import { CollectionRepo } from './collection.repo'
 import { EnvironmentRepo } from './environment.repo'
 import { HistoryRepo } from './history.repo'
 import { NotificationRepo } from './notification.repo'
+import { NodeRepo } from './node.repo'
 import { OpenLogRepo } from './open-log.repo'
 import { ProjectRepo } from './project.repo'
 import { RunnerRepo } from './runner.repo'
@@ -27,6 +28,7 @@ export interface Repos {
   openLog: OpenLogRepo
   schedule: ScheduleRepo
   notification: NotificationRepo
+  node: NodeRepo
 }
 
 export const createRepos = (db: Db): Repos => ({
@@ -42,6 +44,7 @@ export const createRepos = (db: Db): Repos => ({
   openLog: new OpenLogRepo(db),
   schedule: new ScheduleRepo(db),
   notification: new NotificationRepo(db),
+  node: new NodeRepo(db),
 })
 
 export {
@@ -50,6 +53,7 @@ export {
   EnvironmentRepo,
   HistoryRepo,
   NotificationRepo,
+  NodeRepo,
   OpenLogRepo,
   ProjectRepo,
   RunnerRepo,

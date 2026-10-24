@@ -1207,6 +1207,105 @@ try {
   await app.js(`document.querySelector('[aria-label="关闭通知中心"]').click()`)
   await app.waitFor(`!document.querySelector('[data-testid="notify-drawer"]')`, '通知抽屉再次关闭')
 
+  // ── 局域网节点（24 号文档 §7）：与本机自己的开放通道做真实加密配对 ──
+  const openPort = Number(/:(\d+)/.exec(String(report.openSnippet ?? ''))?.[1] ?? 0) || 4730
+  await app.js(`window.__h.click('局域网节点')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="node-pane"]')`, '节点面板打开')
+  report.nodeSelf = await app.js(`(() => {
+    const el = document.querySelector('[data-testid="node-self"]')
+    return { text: el?.innerText ?? '', fp: el?.querySelector('.node-fp')?.innerText ?? '' }
+  })()`)
+  if (!report.nodeSelf.text.includes('本机可被配对')) {
+    throw new Error(`开放通道已启用，本机视图却未显示可配对：${JSON.stringify(report.nodeSelf)}`)
+  }
+  if (!/^([0-9a-f]{2}:){7}[0-9a-f]{2}$/.test(report.nodeSelf.fp)) {
+    throw new Error(`本机指纹格式不对：${report.nodeSelf.fp}`)
+  }
+  await app.js(`window.__h.click('配对局域网里的另一台 ToAPI')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="node-editor"]')`, '节点配对对话框打开')
+  report.nodeEditor = await app.js(`(() => {
+    const host = document.querySelector('[aria-label="对端 IP 或主机名"]').getBoundingClientRect()
+    return {
+      pwType: document.querySelector('[aria-label="调用口令"]').type,
+      hostWidth: Math.round(host.width),
+      port: document.querySelector('[aria-label="对端端口"]').value
+    }
+  })()`)
+  if (report.nodeEditor.pwType !== 'password') throw new Error('口令输入框没有掩码')
+  if (report.nodeEditor.hostWidth < 120)
+    throw new Error(`对端地址输入框只有 ${report.nodeEditor.hostWidth}px`)
+  if (report.nodeEditor.port !== '4730')
+    throw new Error(`端口默认值不是 4730：${report.nodeEditor.port}`)
+  await app.js(`window.__h.set(document.querySelector('[aria-label="调用口令"]'), 'abc123')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="node-weak"]')`, '弱口令当场警告')
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="调用口令"]'), 'flow-verify-secret')`,
+  )
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="对端 IP 或主机名"]'), '127.0.0.1')`,
+  )
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="对端端口"]'), '${String(openPort)}')`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="节点别名"]'), '自环节点')`)
+  await app.js(`document.querySelector('[data-testid="node-save"]').click()`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="node-row"]')`,
+    '加密握手后节点行出现',
+    25000,
+  )
+  report.nodeRow = await app.js(
+    `document.querySelector('[data-testid="node-row"]')?.innerText ?? ''`,
+  )
+  if (!report.nodeRow.includes('自环节点') || !report.nodeRow.includes('未确认')) {
+    throw new Error(`节点行缺少别名或指纹状态：${report.nodeRow}`)
+  }
+  report.nodeActionsOpacity = await app.js(
+    `getComputedStyle(document.querySelector('[data-testid="node-row"] .row-actions')).opacity`,
+  )
+  if (report.nodeActionsOpacity !== '1')
+    throw new Error(`节点行内操作不可见：opacity=${report.nodeActionsOpacity}`)
+  await app.js(`window.__h.click('两屏核对指纹一致后锁定')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="node-row"]')?.innerText.includes('已确认') ?? false`,
+    '指纹确认后解锁写操作',
+  )
+  await app.js(`window.__h.click('拉取远端项目到本机')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="node-pull"]')`, '拉取向导打开')
+  report.nodePull = await app.js(`(() => {
+    const projects = [...document.querySelectorAll('[aria-label="远端项目"] option')].map((o) => o.innerText)
+    return {
+      projects,
+      summary: document.querySelector('[data-testid="node-pull-summary"]')?.innerText ?? ''
+    }
+  })()`)
+  if (report.nodePull.projects.length < 2)
+    throw new Error(`远端项目清单为空：${JSON.stringify(report.nodePull)}`)
+  if (!report.nodePull.summary.includes('密钥'))
+    throw new Error(`拉取预览没提示密钥处理：${report.nodePull.summary}`)
+  await app.js(
+    `document.querySelector('[data-testid="node-pull"] .dialog-actions .pill.ghost').click()`,
+  )
+  await app.waitFor(`!document.querySelector('[data-testid="node-pull"]')`, '拉取向导关闭')
+  await app.js(`window.__h.click('在该机器上代为运行')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="node-run"]')`, '代为测试向导打开')
+  report.nodeRun = await app.js(`(() => ({
+    scopes: [...document.querySelectorAll('[aria-label="运行范围"] option')].map((o) => o.innerText),
+    envs: [...document.querySelectorAll('[aria-label="远端环境"] option')].map((o) => o.innerText),
+    startDisabled: document.querySelector('[data-testid="node-run-go"]')?.disabled ?? null
+  }))()`)
+  if (report.nodeRun.scopes.length < 2)
+    throw new Error(`远端集合结构没取到：${JSON.stringify(report.nodeRun.scopes)}`)
+  if (report.nodeRun.envs.length < 2)
+    throw new Error(`远端环境为空，代为测试无法锁环境：${JSON.stringify(report.nodeRun.envs)}`)
+  if (report.nodeRun.startDisabled !== true) throw new Error('未选远端环境时「开始运行」必须禁用')
+  const nodeShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(resolve(root, '.tmp/toapi-node.png'), Buffer.from(nodeShot.data, 'base64'))
+  await app.js(
+    `document.querySelector('[data-testid="node-run"] .dialog-actions .pill.ghost').click()`,
+  )
+  await app.waitFor(`!document.querySelector('[data-testid="node-run"]')`, '代为测试向导关闭')
+
   await app.js(`window.__h.click('响应与历史')`)
   await app.js(`window.__h.click('发送 (Ctrl+Enter)')`)
   await app.waitFor(`!!document.querySelector('.json-key')`, '截图前响应', 25000)
@@ -1695,8 +1794,8 @@ try {
       cells: rows[0].querySelectorAll('input[type=checkbox]').length
     }
   })()`)
-  if (report.notifyMatrix.rowCount !== 6 || report.notifyMatrix.cells !== 4) {
-    throw new Error(`订阅矩阵不是 6 事件 × 4 通道：${JSON.stringify(report.notifyMatrix)}`)
+  if (report.notifyMatrix.rowCount !== 7 || report.notifyMatrix.cells !== 4) {
+    throw new Error(`订阅矩阵不是 7 事件 × 4 通道：${JSON.stringify(report.notifyMatrix)}`)
   }
   await app.js(`document.querySelector('[data-testid="notify-close"]').click()`)
   await app.waitFor(`!document.querySelector('[data-testid="notify-settings"]')`, '通知设置关闭')

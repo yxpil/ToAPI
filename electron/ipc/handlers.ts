@@ -13,6 +13,7 @@ import type { OpenService } from '../open/service'
 import type { NotifyService } from '../notify/service'
 import { assertWebhookUrl } from '../notify/webhook'
 import type { ScheduleService } from '../schedule/service'
+import type { NodeService } from '../node/service'
 import { writeReport } from '../report/export'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
@@ -34,6 +35,7 @@ export interface HandlerDeps {
   open: OpenService
   notify: NotifyService
   schedule: ScheduleService
+  node: NodeService
   files: FileStore
   /** 起停 Local HTTP API；改完配置必须调它，端口/开关才会真正生效 */
   syncOpenEndpoint: () => Promise<{ running: boolean; port: number }>
@@ -283,6 +285,23 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
       return deps.notify.setSettings(req)
     },
     'notify:test-webhook': (req) => deps.notify.testWebhook(req),
+
+    'node:list': () => deps.node.list(),
+    'node:self': () => deps.node.selfView(),
+    'node:log': (req) => deps.node.callLog(req.limit ?? 30),
+    'node:add': (req) => deps.node.add(req),
+    'node:update': (req) => deps.node.update(req),
+    'node:remove': (req) => {
+      deps.node.remove(req.id)
+    },
+    'node:probe': (req) => deps.node.probe(req.id),
+    'node:tree': (req) => deps.node.tree(req),
+    'node:confirm': (req) => deps.node.confirm(req.id),
+    'node:pull': (req) => deps.node.pull(req),
+    'node:push': (req) => deps.node.push(req),
+    'node:run': (req) => deps.node.run(req),
+    'node:run-get': (req) => deps.node.runGet(req),
+    'node:run-cancel': (req) => deps.node.runCancel(req),
 
     'window:get-state': () => ({ maximized: win.isMaximized() }),
     'window:minimize': () => {

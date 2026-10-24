@@ -108,6 +108,12 @@ export function OpenSettings() {
             onChange={(e) => setLanConfirmed(e.target.checked)}
           />
         </label>
+        {config?.access === 'lan' && (
+          <div className="node-hint" data-testid="open-lan-hint">
+            已对局域网开放，本机可被其他 ToAPI 配对（节点协议强制加密）。明文 /v1/* 端点跨机不加密，
+            只建议本机脚本使用；跨机互传与代为测试请走「节点」面板。
+          </div>
+        )}
 
         <label className="field">
           <span>端口</span>

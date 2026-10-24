@@ -136,6 +136,7 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
       },
       { id: 'pane-runner', label: '显示 Runner 面板', icon: 'panel', run: () => setPane('runner') },
       { id: 'pane-task', label: '显示定时任务面板', icon: 'clock', run: () => setPane('task') },
+      { id: 'pane-node', label: '显示局域网节点面板', icon: 'panel', run: () => setPane('node') },
       {
         id: 'notify-center',
         label: '打开通知中心',

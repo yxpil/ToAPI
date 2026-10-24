@@ -131,6 +131,20 @@ export class OpenConfig {
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   }
 
+  /** 节点信道握手要下发的盐（不是秘密，只是 KDF 上下文，24 号文档 §2.1） */
+  saltHex(): string | null {
+    return this.load().salt
+  }
+
+  /**
+   * 节点信道的预共享密钥 = 口令的 scrypt 派生值本身。
+   * 对端用「口令 + 同一个盐」算出同一把钥匙，因此服务端不需要知道口令明文。
+   */
+  nodeKey(): Buffer | null {
+    const hash = this.load().hash
+    return hash === null ? null : Buffer.from(hash, 'hex')
+  }
+
   setEnabled(enabled: boolean): void {
     const c = this.load()
     if (enabled && c.hash === null) return

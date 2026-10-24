@@ -5,6 +5,7 @@ import type { AppHello } from '@shared/channels'
 import type { ProjectNode, TreeCollectionNode } from '@shared/types'
 import { useApp } from './stores/app.store'
 import { useNotify } from './stores/notify.store'
+import { useNodes } from './stores/node.store'
 import { useOpen } from './stores/open.store'
 import { useRunner } from './stores/runner.store'
 import { useTasks } from './stores/task.store'
@@ -17,6 +18,7 @@ import { EditorPane } from './features/editor/EditorPane'
 import { ResponsePane } from './features/response/ResponsePane'
 import { RunnerPane } from './features/runner/RunnerPane'
 import { TaskPane } from './features/task/TaskPane'
+import { NodePane } from './features/node/NodePanel'
 import { PostmanImport } from './features/postman/PostmanImport'
 import { TapiImport } from './features/tapi/TapiImport'
 import { OpenApprovalBar, OpenSettings } from './features/open/OpenSettings'
@@ -31,7 +33,7 @@ import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
 import logoUrl from './assets/logo.png'
 
-export type Pane = 'response' | 'runner' | 'task'
+export type Pane = 'response' | 'runner' | 'task' | 'node'
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max))
@@ -245,6 +247,7 @@ export default function App() {
 
   useEvent('event:notify', (view) => useNotify.getState().receive(view))
   useEvent('event:task-state', (payload) => useTasks.getState().applyState(payload))
+  useEvent('event:node-state', (payload) => useNodes.getState().applyState(payload))
 
   useEffect(() => {
     if (!toast) return
@@ -402,6 +405,15 @@ export default function App() {
                 >
                   任务
                 </button>
+                <button
+                  role="tab"
+                  aria-selected={pane === 'node'}
+                  title="局域网节点"
+                  data-testid="pane-node-tab"
+                  onClick={() => setPane('node')}
+                >
+                  节点
+                </button>
               </div>
               <div className="pane-actions">
                 <button
@@ -430,6 +442,8 @@ export default function App() {
               <ResponsePane />
             ) : pane === 'runner' ? (
               <RunnerPane />
+            ) : pane === 'node' ? (
+              <NodePane />
             ) : (
               <TaskPane
                 onOpenRun={(runId) => {

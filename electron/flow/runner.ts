@@ -160,6 +160,11 @@ export class RunnerFlow {
     return { runId, total }
   }
 
+  /** 节点探活要报告本机是否正在跑批，避免把联合任务派给忙机器（24 号文档 §5） */
+  isBusy(): boolean {
+    return this.active.size > 0
+  }
+
   cancel(runId: string): void {
     const state = this.active.get(runId)
     if (state) {

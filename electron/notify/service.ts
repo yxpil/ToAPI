@@ -66,6 +66,7 @@ const DEFAULT_RULES: NotifyRuleMap = {
   'runner.failed': { toast: true, os: true, sound: true, webhook: false },
   'task.finished': { toast: true, os: true, sound: false, webhook: false },
   'task.misfire': { toast: true, os: true, sound: false, webhook: false },
+  'node.finished': { toast: true, os: true, sound: false, webhook: false },
   'open.denied': { toast: true, os: true, sound: true, webhook: false },
   'db.failed': { toast: true, os: true, sound: true, webhook: false },
 }

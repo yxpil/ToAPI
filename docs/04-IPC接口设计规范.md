@@ -96,6 +96,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `task:list` / `task:create` / `task:update` / `task:delete` / `task:toggle` / `task:preview` / `task:run-now`（+ 事件 `event:task-state`） | 见 12 号文档 §1/§4 | 定时任务 CRUD 与未来 5 次触发预览；`macro:*` 未实现 |
 | `load:run` / `load:cancel` / `load:get` / `load:compare` / `event:load-tick` | 见 13 号文档 §3 | |
 | `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-settings` / `notify:set-settings` / `notify:test-webhook`（+ 事件 `event:notify`） | 见 15 号文档 §6 | 订阅矩阵与托盘开关合并在一对通道里读写：`get-settings` 返回 `{rules, closeToTray, stateChangeOnly, webhookUrl, webhookTemplate, unread}`，`set-settings` 只覆盖给出的字段 |
+| `node:list` / `node:self` / `node:log` / `node:add` / `node:update` / `node:remove` / `node:probe` / `node:tree` / `node:confirm` / `node:pull` / `node:push` / `node:run` / `node:run-get` / `node:run-cancel`（+ 事件 `event:node-state`） | 见 24 号文档 §7/§8 | 局域网节点：`add/update(带口令)` 内部完成加密握手；`node:self` 只回本机身份与指纹，不含口令与信道密钥；`node:log` 混排入站/出站审计。联合测试（`node:joint-*`）未实现 |
 | `ai:get-config` / `ai:set-config` / `ai:test-connection` / `ai:gen-api` / `ai:gen-script` / `ai:gen-schema` / `ai:explain-failure` / `ai:explain-load` / `ai:interpret-md` / `ai:adopt` / `ai:call-log` | 见 16 号文档 §5 | |
 
 ### 3.6 应用、窗口与握手
@@ -120,6 +121,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `event:window-state` | `{maximized}` | 最大化 / 还原（含系统路径触发） |
 | `event:notify` | `NotificationView`（含 `count` 合并计数） | 每条通知入库后推送：角标与通知中心实时刷新，渲染进程按 `rules[type].toast` 决定是否弹 Toast（15 号文档 §3） |
 | `event:task-state` | `{taskId, running, nextRunAt, lastRunAt, lastRunId, lastFailed}` | 任务启用/停用、触发开始与结束时（12 号文档 §1） |
+| `event:node-state` | `{nodeId, state:'idle'\|'probing'\|'busy'\|'error'\|'paired', detail, runId}` | 配对完成、探活结果变化、远端运行开始/结束（24 号文档 §8） |
 
 ## 4. 核心类型：SendResult
 

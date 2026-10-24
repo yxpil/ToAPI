@@ -1582,6 +1582,9 @@ kbd {
   margin-left: auto;
   display: flex;
   gap: 2px;
+}
+/* 项目树行内操作只在悬停时出现；其他面板的行操作要常驻可见 */
+.tree-row .row-actions {
   opacity: 0;
 }
 .tree-row:hover .row-actions,
@@ -1875,6 +1878,145 @@ kbd {
 }
 .task-preview .pill {
   font-variant-numeric: tabular-nums;
+}
+
+/* 局域网节点面板（24 号文档 §7） */
+.node-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.node-self {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--sp-2);
+  margin: var(--sp-2) var(--sp-3) 0;
+  padding: 6px var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  font-size: 12px;
+  overflow: hidden;
+}
+.node-self-title {
+  font-weight: 600;
+}
+.node-self .meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.node-fp {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--bg-active);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.node-hint {
+  margin: var(--sp-1) 0 0;
+  padding: 6px var(--sp-2);
+  border-radius: var(--radius-control);
+  background: var(--info-soft);
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+.node-message {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--sp-2) var(--sp-3) 0;
+  padding: 6px var(--sp-2);
+  border-radius: var(--radius-control);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12px;
+}
+.node-dot.ready {
+  color: var(--ok);
+}
+.node-dot.off {
+  color: var(--ink-tertiary);
+}
+.node-dot.busy {
+  color: var(--warn);
+}
+.node-dot.err {
+  color: var(--err);
+}
+.node-dot.idle {
+  color: var(--line-strong);
+}
+.node-state {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  padding-top: 3px;
+}
+.node-row {
+  flex-wrap: wrap;
+}
+/* 面板窄时整组行内操作换到第二行，而不是把删除挤成孤零零的一枚 */
+.node-row .task-main {
+  flex: 1 1 240px;
+}
+.node-row .row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 2px;
+}
+.node-addr,
+.node-ver {
+  font-weight: 400;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+.node-fp-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.node-fp-line code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.node-trusted {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.node-untrusted {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.node-confirm {
+  align-self: flex-start;
+  height: 24px;
+  padding: 0 8px;
+}
+.node-host {
+  display: flex;
+  gap: var(--sp-2);
+}
+.node-host input {
+  flex: 1;
+  min-width: 0;
+}
+.node-host input + input {
+  flex: none;
+  width: 84px;
 }
 
 @media (prefers-reduced-motion: reduce) {

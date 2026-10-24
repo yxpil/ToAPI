@@ -224,6 +224,44 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX notification_type_idx ON notification(type, created_at DESC);
     `,
   },
+  {
+    version: 7,
+    name: '007_node',
+    up: `
+      CREATE TABLE node (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        device_id TEXT NOT NULL DEFAULT '',
+        channel_key TEXT NOT NULL DEFAULT '',
+        fingerprint TEXT NOT NULL DEFAULT '',
+        confirmed_fingerprint TEXT NOT NULL DEFAULT '',
+        labels TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        added_at INTEGER NOT NULL,
+        last_seen_at INTEGER,
+        last_error TEXT,
+        seq INTEGER NOT NULL DEFAULT 0,
+        epoch TEXT NOT NULL DEFAULT ''
+      );
+      CREATE UNIQUE INDEX node_host_idx ON node(host, port);
+
+      CREATE TABLE node_call_log (
+        id TEXT PRIMARY KEY,
+        /** 出站调用填本机记录的节点 id；入站（被配对方）调用留空，用 peer 标识来源 */
+        node_id TEXT NOT NULL DEFAULT '',
+        peer TEXT NOT NULL DEFAULT '',
+        action TEXT NOT NULL,
+        ok INTEGER NOT NULL DEFAULT 1,
+        error_code TEXT,
+        time_ms REAL NOT NULL DEFAULT 0,
+        items INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX node_call_created_idx ON node_call_log(created_at DESC);
+    `,
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)

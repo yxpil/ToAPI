@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<NotifyEventType, string> = {
   'runner.failed': '运行失败',
   'task.finished': '定时任务',
   'task.misfire': '补跑',
+  'node.finished': '节点',
   'open.denied': '外部调用',
   'db.failed': '数据库',
 }

@@ -274,6 +274,7 @@ export const NOTIFY_EVENT_TYPES = [
   'runner.failed',
   'task.finished',
   'task.misfire',
+  'node.finished',
   'open.denied',
   'db.failed',
 ] as const
@@ -347,6 +348,138 @@ export interface TestWebhookResult {
   ok: boolean
   status: number
   error: string | null
+}
+
+// ── 局域网节点（24 号文档 §1–§4）──
+
+/** 探活回包：对端身份、能力与项目摘要 */
+export interface NodeProbe {
+  deviceId: string
+  version: string
+  platform: string
+  protocol: number
+  busy: boolean
+  projects: { id: string; name: string; hash: string; apis: number }[]
+}
+
+export interface NodeView {
+  id: string
+  name: string
+  host: string
+  port: number
+  deviceId: string
+  /** 由信道密钥算出的校验指纹，两屏核对用 */
+  fingerprint: string
+  confirmedFingerprint: string
+  /** 指纹已当面锁定且未变化：才允许 push/run 这类写操作 */
+  trusted: boolean
+  labels: string[]
+  enabled: boolean
+  addedAt: number
+  lastSeenAt: number | null
+  lastError: string | null
+}
+
+export interface NodeListItem extends NodeView {
+  /** 列表页并发探活的最新结果，失败为 null */
+  probe: NodeProbe | null
+}
+
+export interface AddNodeInput {
+  name: string
+  host: string
+  port?: number
+  /** 对端「开放调用」里设置的口令；只用于派生信道密钥，不落明文 */
+  password: string
+  labels?: string[]
+}
+
+export interface UpdateNodeInput {
+  id: string
+  name?: string
+  host?: string
+  port?: number
+  labels?: string[]
+  enabled?: boolean
+  /** 给了口令就重新配对（旧的指纹锁定作废） */
+  password?: string
+}
+
+/** 拉取远端项目：落地为本机 .tapi 导入，密钥一律不带 */
+export interface NodePullInput {
+  nodeId: string
+  projectId: string
+  mode: 'new' | 'into'
+  targetProjectId?: string
+  apiConflict?: 'skip' | 'overwrite' | 'duplicate'
+}
+
+export interface NodePushInput {
+  nodeId: string
+  projectId: string
+  apiConflict?: 'skip' | 'overwrite' | 'duplicate'
+}
+
+export interface NodeRunInput {
+  nodeId: string
+  scopeType: 'collection' | 'project' | 'api'
+  /** 远端对象的 id（来自 node:projects 与远端结构） */
+  scopeId: string
+  /** 远端环境 id：代为测试必须显式指定，不跟随对端当前激活 */
+  envId?: string | null
+}
+
+/** 代为测试前的远端结构：只能跑对端真实存在的集合与环境 */
+export interface NodeTree {
+  collections: { id: string; name: string; apis: number }[]
+  envs: { id: string; name: string }[]
+}
+
+export interface NodeRunStatus {
+  runId: string
+  finished: boolean
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  startedAt: number
+  finishedAt: number | null
+  items: {
+    apiName: string
+    status: 'passed' | 'failed' | 'skipped' | 'error'
+    timeMs: number
+    iteration: number
+    error: string | null
+  }[]
+}
+
+/** 本机作为"被配对的一方"的对外信息（24 号文档 §2.1 第 1 步：把 IP:端口 与指纹念给对方核对） */
+export interface NodeSelfView {
+  deviceId: string
+  /** 由信道密钥派生；口令一改就变，未设口令为 null */
+  fingerprint: string | null
+  /** 开放通道已启用且已设口令 = 处于可被配对状态 */
+  pairable: boolean
+  running: boolean
+  access: OpenAccessMode
+  port: number
+  /** 本机非回环 IPv4，只有监听局域网时才对端可达 */
+  addresses: string[]
+}
+
+/** 节点调用留痕（24 号文档 §9）：in = 别人调本机，out = 本机调节点 */
+export interface NodeCallLogView {
+  id: string
+  nodeId: string
+  nodeName: string
+  peer: string
+  direction: 'in' | 'out'
+  action: string
+  ok: boolean
+  errorCode: string | null
+  timeMs: number
+  items: number
+  createdAt: number
 }
 
 // ── 运行报告导出（07/23 号文档）──
@@ -618,6 +751,20 @@ export interface ChannelMap {
   'notify:get-settings': { req: Record<string, never>; res: NotifySettingsView }
   'notify:set-settings': { req: SetNotifySettingsInput; res: NotifySettingsView }
   'notify:test-webhook': { req: TestWebhookInput; res: TestWebhookResult }
+  'node:list': { req: Record<string, never>; res: NodeListItem[] }
+  'node:self': { req: Record<string, never>; res: NodeSelfView }
+  'node:log': { req: { limit?: number }; res: NodeCallLogView[] }
+  'node:add': { req: AddNodeInput; res: NodeListItem }
+  'node:update': { req: UpdateNodeInput; res: NodeListItem }
+  'node:remove': { req: IdInput; res: void }
+  'node:probe': { req: IdInput; res: NodeProbe }
+  'node:tree': { req: { nodeId: string; projectId: string }; res: NodeTree }
+  'node:confirm': { req: IdInput; res: NodeListItem }
+  'node:pull': { req: NodePullInput; res: TapiImportResult }
+  'node:push': { req: NodePushInput; res: { imported: number; message: string } }
+  'node:run': { req: NodeRunInput; res: { runId: string } }
+  'node:run-get': { req: { nodeId: string; runId: string }; res: NodeRunStatus }
+  'node:run-cancel': { req: { nodeId: string; runId: string }; res: void }
   'window:get-state': { req: Record<string, never>; res: WindowState }
   'window:minimize': { req: Record<string, never>; res: void }
   'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
@@ -692,6 +839,20 @@ export const CHANNELS = [
   'notify:get-settings',
   'notify:set-settings',
   'notify:test-webhook',
+  'node:list',
+  'node:self',
+  'node:log',
+  'node:add',
+  'node:update',
+  'node:remove',
+  'node:probe',
+  'node:tree',
+  'node:confirm',
+  'node:pull',
+  'node:push',
+  'node:run',
+  'node:run-get',
+  'node:run-cancel',
   'window:get-state',
   'window:minimize',
   'window:toggle-maximize',
@@ -736,6 +897,14 @@ export interface EventMap {
     lastRunId: string | null
     lastFailed: number | null
   }
+  /** 节点探活/配对/远端运行进度（24 号文档 §8） */
+  'event:node-state': {
+    nodeId: string
+    /** idle | probing | busy | error | paired */
+    state: 'idle' | 'probing' | 'busy' | 'error' | 'paired'
+    detail: string
+    runId: string | null
+  }
 }
 
 export const EVENT_CHANNELS = [
@@ -745,6 +914,7 @@ export const EVENT_CHANNELS = [
   'event:open-approval',
   'event:notify',
   'event:task-state',
+  'event:node-state',
 ] as const satisfies readonly (keyof EventMap)[]
 
 export type EventName = (typeof EVENT_CHANNELS)[number]
