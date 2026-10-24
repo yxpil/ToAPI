@@ -44,7 +44,7 @@ Postman 本地全量兼容：Collection v2.1 / Environment 双向、动态变量
 文档：任意 MD 接口文档解读建项目，.tapi.md 文档内直接跑测试，与集合双向同步
 开放：Local HTTP API（脚本/CI 驱动）+ 内嵌 MCP Server（AI 直接调用）+ MD Skill 包（无 MCP 的 AI 照说明书调用）
 自动化：cron 定时测试 + 系统级唤醒 + 界面动作宏；单机压测（VU/RPS/分位数/阈值/HTML 报告）
-发行：中/英/日/繁随系统识别，版本化 EULA；Windows/macOS/Linux 各发行版、国产 OS 与国产芯片
+发行：Windows x64 / Linux x64（AppImage·deb·rpm·tar.gz）/ macOS arm64 由 CI 原生 runner 出包并本平台冒烟；中/英/日/繁与版本化 EULA 尚未实现（14 号文档）
 AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失败归因/报告解读，生成物草稿制 + 全程脱敏审计
 图标：全部内联 SVG（1.5px 线性、currentColor），严禁 emoji 充当图标
 ```
@@ -58,19 +58,42 @@ AI：OpenAI 兼容接口接入任意模型（含本地 Ollama），NL 生成/失
 | M3 脚本引擎 | **已完成并验证** | worker + vm 双层隔离沙箱；`toapi.request`(含 setHeader/setBody/skip/send 子请求)、`vars/env/globals`、`fake.*`、`test/expect`、`log`、md5/sha256/hmac/base64/uuid/timestamp/sleep；5s 熔断（同步 vm timeout + 异步 terminate）、子请求深度 8 / 总数 50 |
 | M4 联合请求 | **已完成并验证** | 声明式提取器 + 脚本式链式；集合 Runner（顺序执行、运行时变量跨接口传递、stopOnFail、逐项断言、进度事件、运行记录持久化）+ Runner 面板 |
 | UI 规范适配 | **已完成并验证** | Windows 无边框窗口 + 一体化自绘标题栏（拖拽区、最小化/最大化/还原/关闭药丸）、三栏可拖宽（记忆栏宽/分屏方向）、上下分屏、底栏 DB 大小与版本、右键菜单 + 拖拽排序 + 删除确认、Ctrl+K 命令面板、响应状态行、历史虚拟滚动/分组/搜索/加载更多、检查/叉号 SVG 反馈、Toast 与空态；v0.1.5 现代化重构：浅灰画布 + 14px 浮层白卡、10px 间距、下划线文字 Tab、底色方法/状态徽章、填充式输入框、底部居中 Toast、窄容器图标发送钮；v0.1.6 标题栏与窗口/安装包换用自有 `TA.` LOGO |
-| M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；批量报告导出待做 |
-| M5.5–M8 | 未开始 | TAPI、MD 文档、开放调用/MCP、定时与压测、国际化与多平台 |
-| M9 Postman 兼容 | **进行中** | B1 资产与脚本 → B2 数据驱动与 CLI → B3 协议 → B4 自动化长尾；范围与验收见 23 号文档 |
+| M5 伪装与测试 | 部分 | UA 预设/伪装 Header/代理/超时/重定向已可用；Runner 报告导出（`runner:report`，json/junit/html）已可用；响应/历史导出待做 |
+| M5.5 TAPI 互传 | **已完成并验证** | `.tapi` 导出/预览/导入（密钥默认剔除、checksum 与版本闸门、同名合并与判重、事务回滚）+ `toapi run project.tapi`；加密携带与 `payload.cases` 未做（08 号文档 §9） |
+| M6 开放调用 | **已完成并验证** | Local HTTP API + 内嵌 MCP（stdio / Streamable HTTP，15 工具）+ 调用密码闸门 + 客户端授权条 + host 白名单 + 全链路脱敏 + `external_call_log` 审计 + SKILL.md 生成 |
+| M7 定时与通知 | **已完成并验证** | cron/间隔/单次定时回归（锁环境、overlap、misfire、单调时钟）+ 通知中心/Toast/OS 通知/声音/Webhook + 60s 合并与状态变化抑制 + 系统托盘驻留；动作宏与系统级唤醒未做（12 号文档 §6） |
+| M8 国际化与发行 | **发行矩阵已落地三平台，i18n/EULA 未做** | Windows x64、Linux x64（AppImage/deb/rpm/tar.gz）、macOS arm64 由 CI 原生 runner 构建并本平台冒烟（14 号文档 §3.4）；四语言与版本化 EULA 尚未实现 |
+| M9 Postman 兼容 | **进行中** | B1 资产与脚本、B2 数据驱动与 CLI 已发布；B3 协议（v0.5.0）与 B4 自动化长尾（v0.6.0，含 Apifox）待做；范围与验收见 23 号文档 |
 
-**已发布 v0.1.6**：`ToAPI-Setup-0.1.6-win-x64.exe`（NSIS 安装器）与 `ToAPI-0.1.6-win-x64.zip`（便携版），附 `sha256sums.txt`。v0.1.6 换用自有 LOGO：标题栏品牌位内嵌透明底手写 `TA.` 标（24px），窗口/任务栏与安装器图标均由同一张 512×512 PNG 生成，不再是 Electron 默认图标。v0.1.5 是一次视觉重构：浅灰画布（`#F2F2F4`）上漂浮三块白色面板（14px 圆角、1px 细线、10px 间距、无投影），编辑器与响应区改用下划线文字 Tab，方法/状态改为底色色块徽章，URL 大胶囊 44px 且窄容器下发送按钮收为 36px 图标圆钮，Toast 移到窗口底部居中。v0.1.4 把 Windows 原生标题栏与网页合成一体（`frame:false` 无边框，标题栏高 46px、右侧三枚 32×28/8px 控件，最大化图标随 `event:window-state` 实时切换）；Linux/信创仍保留系统原生窗口装饰。v0.1.3 把原生直角下拉替换为定制弹层（10px 圆角、选项 999px 药丸），v0.1.2 补齐三栏拖拽与分屏偏好、右键菜单/确认框/拖拽排序、命令面板、响应状态行、历史虚拟滚动与搜索、底栏 DB 大小。1024×640 下 URL 输入实测 237px。未做代码签名（无证书），首次运行需通过 SmartScreen；产物冒烟由 `scripts/smoke-package.mjs` 验证。
+### 下载
+
+最新发布 **v0.4.1**（三平台产物 + `sha256sums.txt`）：https://github.com/yxpil/ToAPI/releases/latest
+
+| 平台 | 文件 | 安装 |
+|---|---|---|
+| Windows x64 | `ToAPI-Setup-<ver>-win-x64.exe` / `ToAPI-<ver>-win-x64.zip` | NSIS 安装器或便携版 |
+| Linux x64 | `ToAPI-<ver>-linux-x86_64.AppImage` | `chmod +x` 直接运行；无 FUSE 的容器加 `APPIMAGE_EXTRACT_AND_RUN=1` |
+| Debian/Ubuntu/UOS | `ToAPI-<ver>-linux-amd64.deb` | `sudo apt install ./ToAPI-<ver>-linux-amd64.deb` |
+| Fedora/RHEL/麒麟 | `ToAPI-<ver>-linux-x86_64.rpm` | `sudo rpm -i ToAPI-<ver>-linux-x86_64.rpm` |
+| Linux 通用 | `ToAPI-<ver>-linux-x64.tar.gz` | 解压后运行 `toapi` |
+| Apple Silicon | `ToAPI-<ver>-mac-arm64.dmg` / `.zip` | 未签名：Finder 里右键 →「打开」；或 `xattr -dr com.apple.quarantine /Applications/ToAPI.app` |
+
+**未签名**：没有 Windows Authenticode 证书与 Apple 开发者公证，Windows 首次运行过 SmartScreen、macOS 需右键打开。**macOS Intel（x86_64）与 Windows arm64 暂未出包**。
+**平台差异**：只有 Windows 用无边框窗口 + 自绘标题栏，Linux/macOS 保留系统原生装饰；「关窗最小化到托盘」在 Linux 默认关闭（GNOME 等常无可用托盘，默认隐藏等于把应用藏没），Windows/macOS 默认开启。
+
+历史版本：v0.4.0 定时回归 + 通知中心 + 托盘（仅 Windows 产物）；v0.3.0 `.tapi` 互传 + AI 可调用面 + 全局搜索；v0.2.0 Postman B1+B2（Collection/Environment 双向、`pm.*`、数据驱动、`toapi run`）；v0.1.x 界面与视觉基线（浅灰画布 + 白色浮层、药丸控件、自有 LOGO、无边框标题栏）。均未做代码签名。
+
+视觉与交互基线（v0.1.2–v0.1.6 逐步定型，现仍沿用）：浅灰画布 `#F2F2F4` 上漂浮三块白色面板（14px 圆角、1px 细线、10px 间距、无投影）、下划线文字 Tab、底色方法/状态徽章、填充式输入框、URL 44px 大胶囊、底部居中 Toast、原生直角下拉换成 10px 弹层 + 999px 药丸选项、Windows 无边框窗口与 46px 自绘标题栏、标题栏与安装包使用自有 `TA.` LOGO。1024×640 下三栏不重叠、URL 输入实测 ≥200px。
 
 ### 已跑过的验证（不是声明，是实测）
 
 ```bash
 npm run gate             # typecheck + lint + format:check + check:channels + 全部测试
-node scripts/verify-flow.mjs             # CDP 驱动真机：建项目→建接口→发送→脚本断言→集合 Runner→重启验持久化
-node scripts/smoke-package.mjs <exe 路径>  # 打包产物冷启动冒烟
+npm run verify:flow      # CDP 驱动真机：建项目→建接口→发送→脚本断言→集合 Runner→定时任务→通知→重启验持久化→托盘/关窗语义
+node scripts/smoke-package.mjs <产物路径>   # 打包产物冷启动冒烟（三平台通用）
 ```
+
+CI（`.github/workflows/`）：`pr.yml` 在 ubuntu-22.04 与 windows-latest 双平台跑 `npm run gate` + CLI 自举；`release.yml` 在 tag 推送时于 **windows-latest / ubuntu-22.04 / macos-14 三个原生 runner** 各自跑「本平台测试 → golden-path e2e → 打包 → 产物冒烟」，全绿才收进 Release 并生成 `sha256sums.txt`。v0.4.1 三平台首次运行即全绿，并暴露了只在 macOS 出现的 App Nap 挂起问题（已修，见 15 号文档 §4）。
 
 真机验证要点（`scripts/verify-flow.mjs` 输出）：状态行 `200 OK · 16ms · 112 B`、脚本两条断言通过、两个接口的集合 Runner 输出「默认集合 · 2/2 项 · 通过率 100%」、query 送达靶场；画布 `rgb(242,242,244)`、三块面板白底/1px/14px、下划线 Tab 透明底+2px 黑条、Toast 距底 44px 且 999px 圆角；右键菜单 10px/无阴影、下拉弹层 10px/无阴影/选项 999px、命令面板 14px、删除确认文案、拖拽排序、栏宽 300→240 与上下/左右分屏全部持久化；1024×640 三栏不重叠且 URL 237px；标题栏 46px 且 `drag`、控件 `no-drag`、三枚 32×28/8px 均带 title、品牌 LOGO 实测加载（128px 源显示 24px），点击最大化/还原/最小化后由 Win32 `GetWindowPlacement` 实测 `maximized → normal → minimized`，关闭按钮真实退出进程；字体仅 12/13/14/20、按钮按角色圆角且带 title、渐变/投影计数 0、JSON 三色 `22/29/180` 正确；DOM emoji 0、两轮 console 错误 0。
 

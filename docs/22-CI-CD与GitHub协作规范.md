@@ -39,6 +39,14 @@ main（受保护）        ← 永远可发布
 
 ## 3. GitHub Actions 流水线
 
+> 落地状态（2026-10-24）：`pr.yml` 与 `release.yml` 已上线并在 v0.4.1 三平台跑通；
+> `nightly.yml` 尚未落地（其中压测长跑、loong64 依赖的功能本身还没实现）。
+> 实测踩到的坑已固化进流水线，别再踩第二遍：
+> ① Windows runner 默认把文本检出成 CRLF，`prettier --check` 会全线误报 → 仓库根 `.gitattributes` 强制 `* text=auto eol=lf`；
+> ② tag 触发时 electron-builder 会自行尝试发布到 GitHub Releases，CI 不给 `GH_TOKEN` 就直接失败 → 打包步骤显式 `--publish never`；
+> ③ 布局阈值类断言必须先固定视口（`Emulation.setDeviceMetricsOverride`），否则 runner 的窗口尺寸/DPI 会让"URL ≥200px"这类检查随机误判；
+> ④ 驱动真机的 CDP 调用必须有超时与步骤日志（`verify-flow.mjs` 现为 30s 请求超时 + 12 分钟看门狗），否则 macOS 上的一次挂起会白烧 40 分钟 job。
+
 ### 3.1 `pr.yml` — PR 门禁（每个 PR 触发，目标 < 10 分钟）
 ```
 jobs 并行：
