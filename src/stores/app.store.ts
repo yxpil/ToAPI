@@ -54,6 +54,7 @@ interface AppState {
   removeProject(id: string): Promise<void>
   removeCollection(id: string): Promise<void>
   duplicateApi(id: string): Promise<void>
+  renameNode(kind: 'project' | 'collection' | 'api', id: string, name: string): Promise<void>
   moveNode(target: MoveTarget): Promise<void>
   patchApi(patch: Partial<Api>): void
   saveApi(): Promise<void>
@@ -245,6 +246,19 @@ export const useApp = create<AppState>((set, get) => {
       if (!copy) return
       await get().refreshTree()
       await get().selectApi(copy.id)
+    },
+
+    async renameNode(kind, id, name) {
+      let ok = true
+      if (kind === 'api') await call(invoke('api:update', { id, name }), () => (ok = false))
+      else if (kind === 'collection')
+        await call(invoke('collection:update', { id, name }), () => (ok = false))
+      else await call(invoke('project:update', { id, name }), () => (ok = false))
+      if (!ok) return
+      // 只改当前打开接口的名字时同步编辑器草稿，避免重新拉取把用户未存改动冲掉
+      if (kind === 'api' && get().selectedApiId === id) get().patchApi({ name })
+      await get().refreshTree()
+      set({ toast: { kind: 'ok', text: `已重命名为「${name}」` } })
     },
 
     async moveNode(target) {

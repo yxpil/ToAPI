@@ -29,6 +29,12 @@ const walk = (nodes: TreeCollectionNode[], visit: (node: TreeCollectionNode) => 
   }
 }
 
+const countCollections = (nodes: TreeCollectionNode[]): number =>
+  nodes.reduce((n, c) => n + 1 + countCollections(c.children), 0)
+
+const countApis = (nodes: TreeCollectionNode[]): number =>
+  nodes.reduce((n, c) => n + c.apis.length + countApis(c.children), 0)
+
 /** Ctrl+K 命令面板（06 号文档 §5）：跳接口 / 跑集合 / 切环境 / 快捷动作 */
 export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Props) {
   const { tree, envs, activeProjectId, api, selectProject, selectApi, activateEnv, send, saveApi } =
@@ -71,6 +77,13 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
     for (const node of tree) {
       const projectId = node.project.id
       const projectName = node.project.name
+      list.push({
+        id: `project-${projectId}`,
+        label: `打开项目 · ${projectName}`,
+        detail: `${countCollections(node.collections)} 集合 / ${countApis(node.collections)} 接口`,
+        icon: 'folder',
+        run: () => selectProject(projectId),
+      })
       walk(node.collections, (collection) => {
         list.push({
           id: `run-${collection.id}`,
@@ -88,7 +101,8 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
             id: `api-${item.id}`,
             label: item.name,
             hint: item.method,
-            detail: `${projectName} / ${collection.name}`,
+            // URL 进 detail 才能「按 URL 搜接口」（06 号文档 §5）
+            detail: `${projectName} / ${collection.name} · ${item.url}`,
             icon: 'doc',
             run: async () => {
               if (activeProjectId !== projectId) await selectProject(projectId)
@@ -177,7 +191,7 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
             ref={inputRef}
             className="palette-input"
             value={query}
-            placeholder="搜索接口、集合、环境或动作"
+            placeholder="搜索项目、接口、URL、集合、环境或动作"
             aria-label="命令"
             spellCheck={false}
             onChange={(e) => {

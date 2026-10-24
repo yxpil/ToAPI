@@ -706,6 +706,82 @@ try {
   await app.waitFor(`!document.querySelector('[data-testid="command-palette"]')`, '命令面板关闭')
   await app.waitFor(`window.__h.val('接口名称') === '查订单'`, '命令面板跳转接口')
 
+  // ── 全局搜索：按 URL 命中接口、按名称命中项目（06 号文档 §5）──
+  await app.js(`window.__h.key('k', { ctrlKey: true })`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="command-palette"]')`,
+    '命令面板再次打开',
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '/orders?page=2')`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('查订单') && e.innerText.includes('/orders'))`,
+    '按 URL 搜到接口',
+  )
+  report.searchByUrl = await app.js(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].map((e) => e.innerText)`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '订单中心')`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('打开项目 · 订单中心'))`,
+    '按名称搜到项目',
+  )
+  report.searchProject = await app.js(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].filter((e) => e.innerText.includes('打开项目')).map((e) => e.innerText)`,
+  )
+  await app.js(
+    `document.querySelector('[aria-label="命令"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+  )
+  await app.waitFor(`!document.querySelector('[data-testid="command-palette"]')`, '命令面板关闭')
+
+  // ── 接口单独重命名（06 号文档 §3.4）：名称改、URL 与方法不变 ──
+  const openRename = async () => {
+    await app.js(`(() => {
+      const row = [...document.querySelectorAll('[data-testid^="api-"]')].find((e) => e.innerText.includes('查订单'))
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 300, clientY: 300 }))
+      return true
+    })()`)
+    await app.waitFor(
+      `!!document.querySelector('[data-testid="context-menu"]')`,
+      '接口右键菜单出现',
+    )
+    report.renameMenuItem = await app.js(
+      `[...document.querySelectorAll('[data-testid="context-menu"] button')].map((b) => b.innerText)`,
+    )
+    await app.js(
+      `[...document.querySelectorAll('[data-testid="context-menu"] button')].find((b) => b.innerText === '重命名接口').click()`,
+    )
+    await app.waitFor(
+      `!!document.querySelector('[data-testid="rename-dialog"]')`,
+      '重命名对话框出现',
+    )
+  }
+
+  await openRename()
+  report.renamePrefill = await app.js(
+    `document.querySelector('[data-testid="rename-input"]')?.value ?? null`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[data-testid="rename-input"]'), '查订单V2')`)
+  await app.js(`document.querySelector('[data-testid="rename-ok"]').click()`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="api-"] .label')].some((e) => e.innerText === '查订单V2')`,
+    '树行名称已更新',
+  )
+  await app.waitFor(`window.__h.val('接口名称') === '查订单V2'`, '编辑器标题同步')
+  await app.waitFor(
+    `document.querySelector('[aria-label="请求 URL"]')?.value.includes('/orders?page=2')`,
+    '重命名后 URL 不变',
+  )
+  report.renamedTo = await app.js(`window.__h.val('接口名称')`)
+
+  // 改回原名，保持后续断言（截图、重启持久化）的语义不变
+  await openRename()
+  await app.js(`window.__h.set(document.querySelector('[data-testid="rename-input"]'), '查订单')`)
+  await app.js(`document.querySelector('[data-testid="rename-ok"]').click()`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid^="api-"] .label')].some((e) => e.innerText === '查订单')`,
+    '名称已还原',
+  )
+
   await app.js(`window.__h.key('R', { ctrlKey: true, shiftKey: true })`)
   await app.waitFor(
     `!!document.querySelector('[data-testid="runner"]')`,

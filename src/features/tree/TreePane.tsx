@@ -8,6 +8,7 @@ import { Icon } from '../../components/Icon'
 import { EmptyState } from '../../components/EmptyState'
 import { ContextMenu, type MenuItem } from '../../components/ContextMenu'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { RenameDialog } from '../../components/RenameDialog'
 
 const methodClass = (method: string): string =>
   ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(method) ? method : 'OTHER'
@@ -44,6 +45,14 @@ interface ConfirmState {
   onConfirm: () => void
 }
 
+interface RenameState {
+  kind: 'project' | 'collection' | 'api'
+  id: string
+  title: string
+  label: string
+  current: string
+}
+
 const countCollections = (nodes: TreeCollectionNode[]): number =>
   nodes.reduce((n, c) => n + 1 + countCollections(c.children), 0)
 
@@ -72,6 +81,7 @@ interface CollectionProps {
   setDropTarget: (d: { key: string; pos: 'before' | 'after' | 'into' } | null) => void
   setMenu: (m: MenuState) => void
   setConfirm: (c: ConfirmState) => void
+  setRenaming: (r: RenameState) => void
 }
 
 function CollectionBlock({
@@ -86,6 +96,7 @@ function CollectionBlock({
   setDropTarget,
   setMenu,
   setConfirm,
+  setRenaming,
 }: CollectionProps) {
   const { selectedApiId, selectApi, moveNode } = useApp()
   const runCollection = useRunner((s) => s.runCollection)
@@ -296,6 +307,7 @@ function CollectionBlock({
           setDropTarget={setDropTarget}
           setMenu={setMenu}
           setConfirm={setConfirm}
+          setRenaming={setRenaming}
         />
       ))}
     </>
@@ -313,6 +325,7 @@ export function TreePane() {
     removeProject,
     removeCollection,
     duplicateApi,
+    renameNode,
     selectApi,
     moveNode,
     openPostmanImport,
@@ -321,6 +334,7 @@ export function TreePane() {
   const [name, setName] = useState('')
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [confirm, setConfirm] = useState<ConfirmState | null>(null)
+  const [renaming, setRenaming] = useState<RenameState | null>(null)
   const [dragging, setDragging] = useState<DragState | null>(null)
   const [dropTarget, setDropTarget] = useState<{
     key: string
@@ -348,6 +362,17 @@ export function TreePane() {
           onSelect: () => void exportCollection(state.node.project.id),
         },
         {
+          label: '重命名项目',
+          onSelect: () =>
+            setRenaming({
+              kind: 'project',
+              id: state.node.project.id,
+              title: '重命名项目',
+              label: '新名称',
+              current: state.node.project.name,
+            }),
+        },
+        {
           label: '删除项目',
           danger: true,
           onSelect: () =>
@@ -372,6 +397,17 @@ export function TreePane() {
           onSelect: () => void exportCollection(state.projectId, [state.node.id]),
         },
         {
+          label: '重命名集合',
+          onSelect: () =>
+            setRenaming({
+              kind: 'collection',
+              id: state.node.id,
+              title: '重命名集合',
+              label: '新名称',
+              current: state.node.name,
+            }),
+        },
+        {
           label: '删除集合',
           danger: true,
           onSelect: () =>
@@ -386,6 +422,17 @@ export function TreePane() {
     return [
       { label: '打开', onSelect: () => void selectApi(state.api.id) },
       { label: '复制接口', onSelect: () => void duplicateApi(state.api.id) },
+      {
+        label: '重命名接口',
+        onSelect: () =>
+          setRenaming({
+            kind: 'api',
+            id: state.api.id,
+            title: '重命名接口',
+            label: '新名称',
+            current: state.api.name,
+          }),
+      },
       {
         label: '删除接口',
         danger: true,
@@ -518,6 +565,7 @@ export function TreePane() {
                   setDropTarget={setDropTarget}
                   setMenu={setMenu}
                   setConfirm={setConfirm}
+                  setRenaming={setRenaming}
                 />
               ))}
             </>
@@ -536,6 +584,18 @@ export function TreePane() {
           onConfirm={() => {
             confirm.onConfirm()
             setConfirm(null)
+          }}
+        />
+      )}
+      {renaming && (
+        <RenameDialog
+          title={renaming.title}
+          label={renaming.label}
+          initial={renaming.current}
+          onCancel={() => setRenaming(null)}
+          onSubmit={(value) => {
+            void renameNode(renaming.kind, renaming.id, value)
+            setRenaming(null)
           }}
         />
       )}
