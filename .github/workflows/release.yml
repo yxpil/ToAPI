@@ -68,8 +68,10 @@ jobs:
         run: ${{ matrix.e2e }}
       - name: 打包本平台发行物
         # 无签名证书：Windows 不签 Authenticode，macOS 不公证（identity: null），
-        # 产物在 Release 说明里明确标注未签名
-        run: npx electron-builder --config.directories.output=out
+        # 产物在 Release 说明里明确标注未签名。
+        # --publish never 必须显式给：tag 触发时 electron-builder 会自行尝试发布到
+        # GitHub Releases，拿不到 GH_TOKEN 就直接失败（v0.4.1 首跑实测）。
+        run: npx electron-builder --config.directories.output=out --publish never
       - name: 产物冒烟（14 号文档 §3.3 发版门禁）
         run: ${{ matrix.smoke }}
       - name: 收集安装包
