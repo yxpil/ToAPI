@@ -1,0 +1,39 @@
+name: pr
+
+# 22 号文档 §3.1：PR 门禁。lint/type/契约/单元/集成全绿才可合并。
+# 双平台跑是因为路径分隔符、CRLF 与 node:sqlite 的平台差异只在各自系统上才暴露。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: 安装依赖（含 Electron 二进制）
+        run: npm ci
+      - name: 门禁 = typecheck + lint + prettier + check-channels + 全部测试
+        run: npm run gate
+      - name: 无头 CLI 自举（23 号文档 §5.3）
+        run: node bin/toapi.cjs --version

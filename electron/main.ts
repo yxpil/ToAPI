@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createKernel, userDataPaths, type Kernel } from './kernel'
 import { registerAll } from './ipc/router'
 import { createDesktop, type Desktop } from './desktop/tray'
+import { closeToTraySupported } from './notify/service'
 import { createLogger } from './infra/logger'
 
 const log = createLogger('main')
@@ -105,6 +106,7 @@ void app.whenReady().then(() => {
       isFront: () => desktop?.hooks.isFront() ?? false,
     },
     onNotification: () => desktop?.refresh(),
+    closeToTrayByDefault: closeToTraySupported(process.platform),
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })
   log.info('kernel ready', kernel.hello)

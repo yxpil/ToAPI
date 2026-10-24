@@ -3,7 +3,10 @@
   "version": "0.4.0",
   "private": true,
   "description": "简约可脚本化的本地 API 请求与测试工具",
-  "author": "ToAPI",
+  "author": {
+    "name": "yxpil",
+    "email": "yxpil@users.noreply.github.com"
+  },
   "license": "UNLICENSED",
   "main": "dist-electron/main.cjs",
   "bin": {
@@ -68,5 +71,9 @@
   "allowScripts": {
     "esbuild@0.28.2": true,
     "electron-builder@26.15.3": true
+  },
+  "homepage": "https://github.com/yxpil/ToAPI",
+  "bugs": {
+    "url": "https://github.com/yxpil/ToAPI/issues"
   }
 }

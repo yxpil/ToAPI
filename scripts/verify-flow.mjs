@@ -13,6 +13,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const APP_VERSION = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version
 const port = 9334
 const profile = resolve(root, '.tmp/e2e-flow-profile')
+/** 自绘标题栏与 Win32 窗口态只属于 Windows；托盘驻留语义 Windows/macOS 默认开、Linux 默认关 */
+const IS_WINDOWS = process.platform === 'win32'
+const TRAY_BY_DEFAULT = process.platform === 'win32' || process.platform === 'darwin'
 
 rmSync(profile, { recursive: true, force: true })
 mkdirSync(profile, { recursive: true })
@@ -106,7 +109,13 @@ let child = null
 const launch = async () => {
   child = spawn(
     electronBin,
-    ['.', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`],
+    [
+      '.',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      // CI 的 Linux runner 以容器/root 跑，Chromium sandbox 不可用
+      '--no-sandbox',
+    ],
     {
       cwd: root,
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -1206,42 +1215,51 @@ try {
   await app.send('Emulation.clearDeviceMetricsOverride')
   await wait(300)
 
-  // ── 无边框窗口 + 自绘标题栏（06 号文档 §4）──
-  // Electron 未实现 CDP Browser.getWindowForTarget，改问 Win32 GetWindowPlacement
-  const windowState = () => {
-    try {
-      return execFileSync(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          resolve(root, 'scripts/window-state.ps1'),
-          '-ProcessId',
-          String(child.pid),
-          '-Action',
-          'state',
-        ],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-      ).trim()
-    } catch {
-      return 'no-window'
+  // ── 无边框窗口 + 自绘标题栏（06 号文档 §4）：仅 Windows ──
+  // Linux/macOS/信创按 14 号文档保留系统原生装饰，界面不该出现自绘标题栏
+  if (!IS_WINDOWS) {
+    report.titlebarOnNonWindows = await app.js(
+      `document.querySelector('[data-testid="titlebar"]') === null`,
+    )
+    if (report.titlebarOnNonWindows !== true) {
+      throw new Error(`${process.platform} 下不应渲染自绘标题栏`)
     }
-  }
-  const waitWindowState = async (expected, label) => {
-    let last = ''
-    for (let i = 0; i < 40; i++) {
-      last = windowState()
-      if (last === expected) return true
-      await wait(150)
+  } else {
+    // Electron 未实现 CDP Browser.getWindowForTarget，改问 Win32 GetWindowPlacement
+    const windowState = () => {
+      try {
+        return execFileSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            resolve(root, 'scripts/window-state.ps1'),
+            '-ProcessId',
+            String(child.pid),
+            '-Action',
+            'state',
+          ],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+        ).trim()
+      } catch {
+        return 'no-window'
+      }
     }
-    throw new Error(`窗口状态未变为 ${expected}（实际 ${last}）：${label}`)
-  }
+    const waitWindowState = async (expected, label) => {
+      let last = ''
+      for (let i = 0; i < 40; i++) {
+        last = windowState()
+        if (last === expected) return true
+        await wait(150)
+      }
+      throw new Error(`窗口状态未变为 ${expected}（实际 ${last}）：${label}`)
+    }
 
-  await waitWindowState('normal', '初始窗口')
-  report.windowInitial = windowState()
-  report.titlebar = await app.js(`(() => {
+    await waitWindowState('normal', '初始窗口')
+    report.windowInitial = windowState()
+    report.titlebar = await app.js(`(() => {
     const bar = document.querySelector('[data-testid="titlebar"]')
     if (!bar) return null
     const controls = bar.querySelector('.titlebar-controls')
@@ -1268,63 +1286,68 @@ try {
       }))
     }
   })()`)
-  if (!report.titlebar) throw new Error('Windows 下未渲染自绘标题栏')
-  if (report.titlebar.height !== 46) throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
-  if (report.titlebar.drag !== 'drag' || report.titlebar.controlsDrag !== 'no-drag') {
-    throw new Error(`标题栏拖拽区不符：${JSON.stringify(report.titlebar)}`)
-  }
-  if (
-    !report.titlebar.logo ||
-    !report.titlebar.logo.complete ||
-    report.titlebar.logo.naturalWidth < 64 ||
-    report.titlebar.logo.width !== 24 ||
-    report.titlebar.logo.height !== 24
-  ) {
-    throw new Error(`品牌 LOGO 未正确加载：${JSON.stringify(report.titlebar.logo)}`)
-  }
-  if (report.titlebar.buttons.length !== 3) {
-    throw new Error(`窗口控件数量不符：${report.titlebar.buttons.length}`)
-  }
-  if (
-    report.titlebar.buttons.some(
-      (b) => b.radius !== '8px' || b.width !== 32 || b.height !== 28 || !b.title,
+    if (!report.titlebar) throw new Error('Windows 下未渲染自绘标题栏')
+    if (report.titlebar.height !== 46)
+      throw new Error(`标题栏高度不符：${report.titlebar.height}px`)
+    if (report.titlebar.drag !== 'drag' || report.titlebar.controlsDrag !== 'no-drag') {
+      throw new Error(`标题栏拖拽区不符：${JSON.stringify(report.titlebar)}`)
+    }
+    if (
+      !report.titlebar.logo ||
+      !report.titlebar.logo.complete ||
+      report.titlebar.logo.naturalWidth < 64 ||
+      report.titlebar.logo.width !== 24 ||
+      report.titlebar.logo.height !== 24
+    ) {
+      throw new Error(`品牌 LOGO 未正确加载：${JSON.stringify(report.titlebar.logo)}`)
+    }
+    if (report.titlebar.buttons.length !== 3) {
+      throw new Error(`窗口控件数量不符：${report.titlebar.buttons.length}`)
+    }
+    if (
+      report.titlebar.buttons.some(
+        (b) => b.radius !== '8px' || b.width !== 32 || b.height !== 28 || !b.title,
+      )
+    ) {
+      throw new Error(`窗口控件规格不符：${JSON.stringify(report.titlebar.buttons)}`)
+    }
+
+    await app.js(`window.__h.click('最大化')`)
+    await app.waitFor(`!!document.querySelector('.win-btn[title="还原"]')`, '最大化后图标切到还原')
+    await waitWindowState('maximized', '标题栏最大化')
+    report.windowMaximized = windowState()
+    const maxShot = await app.send('Page.captureScreenshot', { format: 'png' })
+    writeFileSync(resolve(root, '.tmp/toapi-titlebar.png'), Buffer.from(maxShot.data, 'base64'))
+
+    await app.js(`window.__h.click('还原')`)
+    await app.waitFor(
+      `!!document.querySelector('.win-btn[title="最大化"]')`,
+      '还原后图标切回最大化',
     )
-  ) {
-    throw new Error(`窗口控件规格不符：${JSON.stringify(report.titlebar.buttons)}`)
+    await waitWindowState('normal', '标题栏还原')
+    report.windowRestored = windowState()
+
+    await app.js(`window.__h.click('最小化')`)
+    await waitWindowState('minimized', '标题栏最小化')
+    report.windowMinimized = windowState()
+    execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        resolve(root, 'scripts/window-state.ps1'),
+        '-ProcessId',
+        String(child.pid),
+        '-Action',
+        'restore',
+      ],
+      { encoding: 'utf8' },
+    )
+    await waitWindowState('normal', 'Win32 恢复窗口')
+    await app.waitFor(`!!document.querySelector('.win-btn[title="最大化"]')`, '恢复后标题栏可用')
   }
-
-  await app.js(`window.__h.click('最大化')`)
-  await app.waitFor(`!!document.querySelector('.win-btn[title="还原"]')`, '最大化后图标切到还原')
-  await waitWindowState('maximized', '标题栏最大化')
-  report.windowMaximized = windowState()
-  const maxShot = await app.send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(resolve(root, '.tmp/toapi-titlebar.png'), Buffer.from(maxShot.data, 'base64'))
-
-  await app.js(`window.__h.click('还原')`)
-  await app.waitFor(`!!document.querySelector('.win-btn[title="最大化"]')`, '还原后图标切回最大化')
-  await waitWindowState('normal', '标题栏还原')
-  report.windowRestored = windowState()
-
-  await app.js(`window.__h.click('最小化')`)
-  await waitWindowState('minimized', '标题栏最小化')
-  report.windowMinimized = windowState()
-  execFileSync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      resolve(root, 'scripts/window-state.ps1'),
-      '-ProcessId',
-      String(child.pid),
-      '-Action',
-      'restore',
-    ],
-    { encoding: 'utf8' },
-  )
-  await waitWindowState('normal', 'Win32 恢复窗口')
-  await app.waitFor(`!!document.querySelector('.win-btn[title="最大化"]')`, '恢复后标题栏可用')
 
   report.runtimeErrorsRound1 = app.errors
   await closeApp(app)
@@ -1603,47 +1626,38 @@ try {
 
   report.runtimeErrorsRound2 = app.errors
 
-  // ── 关窗收进托盘（15 号文档 §4）：默认开，此时进程必须存活且页面转入后台 ──
-  await app.js(`window.__h.click('关闭 (Alt+F4)')`)
-  await wait(700)
-  report.closeToTrayAlive = child?.exitCode === null
-  report.closeToTrayHidden = await app.js(`document.visibilityState`)
-  if (!report.closeToTrayAlive)
-    throw new Error('勾选「关窗最小化到托盘」后关闭应驻留托盘而不是退出')
-  if (report.closeToTrayHidden !== 'hidden') {
-    throw new Error(`关窗后页面未转入后台：visibilityState=${report.closeToTrayHidden}`)
+  // ── 通知设置与关窗语义（15 号文档 §4、14 号文档 §3.1）──
+  // 顺序要紧：Linux 关窗即退出，所以设置面板必须在窗口还开着时验完
+  const closeWindow = async () => {
+    if (IS_WINDOWS) await app.js(`window.__h.click('关闭 (Alt+F4)')`)
+    else await app.js(`window.close()`)
+  }
+  const openNotifySettings = async (label) => {
+    await app.js(`window.__h.key('k', { ctrlKey: true })`)
+    await app.waitFor(`!!document.querySelector('[data-testid="command-palette"]')`, label)
+    await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '通知设置')`)
+    await app.waitFor(
+      `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('通知设置'))`,
+      '命令面板能找到通知设置',
+    )
+    await app.js(
+      `document.querySelector('[aria-label="命令"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`,
+    )
+    await app.waitFor(`!!document.querySelector('[data-testid="notify-settings"]')`, '通知设置打开')
   }
 
-  // 关掉该设置后再关窗，才走真退出（标题栏关闭语义在 06 号文档 §4）
-  await app.js(`window.__h.key('k', { ctrlKey: true })`)
-  await app.waitFor(
-    `!!document.querySelector('[data-testid="command-palette"]')`,
-    '命令面板（托盘设置）打开',
-  )
-  await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '通知设置')`)
-  await app.waitFor(
-    `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('通知设置'))`,
-    '命令面板能找到通知设置',
-  )
-  await app.js(
-    `document.querySelector('[aria-label="命令"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`,
-  )
-  await app.waitFor(`!!document.querySelector('[data-testid="notify-settings"]')`, '通知设置打开')
+  await openNotifySettings('命令面板（托盘设置）打开')
   report.traySettingBefore = await app.js(
     `document.querySelector('[data-testid="notify-tray"]')?.checked ?? null`,
   )
-  if (report.traySettingBefore !== true) throw new Error('托盘设置默认应为开')
-  await app.js(`document.querySelector('[data-testid="notify-tray"]').click()`)
-  await app.waitFor(
-    `document.querySelector('[data-testid="notify-tray"]')?.checked === false`,
-    '托盘设置已关闭',
-  )
+  if (report.traySettingBefore !== TRAY_BY_DEFAULT) {
+    throw new Error(`托盘驻留默认值在 ${process.platform} 上应为 ${TRAY_BY_DEFAULT}`)
+  }
   report.notifyMatrix = await app.js(`(() => {
     const rows = [...document.querySelectorAll('.notify-matrix tbody tr')]
     return {
       rowCount: rows.length,
-      cells: rows[0].querySelectorAll('input[type=checkbox]').length,
-      width: Math.round(document.querySelector('[data-testid="notify-settings"]').getBoundingClientRect().width)
+      cells: rows[0].querySelectorAll('input[type=checkbox]').length
     }
   })()`)
   if (report.notifyMatrix.rowCount !== 6 || report.notifyMatrix.cells !== 4) {
@@ -1652,10 +1666,35 @@ try {
   await app.js(`document.querySelector('[data-testid="notify-close"]').click()`)
   await app.waitFor(`!document.querySelector('[data-testid="notify-settings"]')`, '通知设置关闭')
 
-  await app.js(`window.__h.click('关闭 (Alt+F4)')`)
-  for (let i = 0; i < 40 && child && child.exitCode === null; i++) await wait(150)
-  report.closedViaTitlebar = child?.exitCode !== null
-  if (!report.closedViaTitlebar) throw new Error('关闭托盘驻留后，标题栏关闭仍未退出应用')
+  if (TRAY_BY_DEFAULT) {
+    // 默认开：关窗收进托盘，进程必须活着且页面转入后台
+    await closeWindow()
+    await wait(700)
+    report.closeToTrayAlive = child?.exitCode === null
+    report.closeToTrayHidden = await app.js(`document.visibilityState`)
+    if (!report.closeToTrayAlive) throw new Error('关窗应驻留托盘而不是退出进程')
+    if (report.closeToTrayHidden !== 'hidden') {
+      throw new Error(`关窗后页面未转入后台：visibilityState=${report.closeToTrayHidden}`)
+    }
+    // 窗口隐藏时 DOM 仍可驱动：关掉开关，让下一步验证真退出
+    await openNotifySettings('命令面板（隐藏窗口下）打开')
+    await app.js(`document.querySelector('[data-testid="notify-tray"]').click()`)
+    await app.waitFor(
+      `document.querySelector('[data-testid="notify-tray"]')?.checked === false`,
+      '托盘设置已关闭',
+    )
+    await app.js(`document.querySelector('[data-testid="notify-close"]').click()`)
+  }
+
+  await closeWindow()
+  await wait(1500)
+  report.closedExitsProcess = child?.exitCode !== null
+  if (process.platform === 'darwin') {
+    // mac 语义：关掉最后一个窗口进程仍留在 Dock，只有显式退出才结束
+    if (report.closedExitsProcess) throw new Error('macOS 关窗后进程应继续在 Dock 存活')
+  } else if (!report.closedExitsProcess) {
+    throw new Error('关闭托盘驻留后，关窗应直接退出进程')
+  }
   app.ws.close()
 } finally {
   await closeApp()

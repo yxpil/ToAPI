@@ -1,0 +1,120 @@
+name: release
+
+# 22 号文档 §3.3 + 14 号文档 §3.1 的 P0 矩阵：三平台原生 runner 出包，
+# 每个平台的产物先在本平台真机冒烟（启动→握手→无脚本错误）与 golden-path e2e，全绿才进 Release。
+# 本机没有 Linux/macOS 环境，所以跨平台验证只能在这里做，不做"理论上能跑"的声明。
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要发布的 tag（如 v0.4.0）
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows x64 (nsis + zip)
+            os: windows-latest
+            packages: out/*.exe out/*.zip
+            smoke: node scripts/smoke-package.mjs out/win-unpacked/ToAPI.exe
+            e2e: node scripts/verify-flow.mjs
+          - label: linux x64 (AppImage + deb + rpm + tar.gz)
+            os: ubuntu-22.04
+            packages: out/*.AppImage out/*.deb out/*.rpm out/*.tar.gz
+            # AppImage 在 CI 容器里没有 FUSE，用解压即跑模式（见 job env）；GUI 需要虚拟显示
+            smoke: xvfb-run -a node scripts/smoke-package.mjs out/*.AppImage
+            e2e: xvfb-run -a node scripts/verify-flow.mjs
+          - label: macos arm64 (dmg + zip)
+            os: macos-14
+            packages: out/*.dmg out/*.zip
+            smoke: node scripts/smoke-package.mjs "out/mac-arm64/ToAPI.app/Contents/MacOS/ToAPI"
+            e2e: node scripts/verify-flow.mjs
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      # 只对 AppImage 生效；其他平台忽略
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_dispatch 指定历史 tag 时需要完整历史与标签
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: 安装依赖
+        run: npm ci
+      - name: 本平台测试（含 node:sqlite 真实读写与靶场）
+        run: npm test
+      - name: 构建渲染与主进程产物
+        run: npm run build
+      - name: golden-path e2e（06/07/12/15 号文档断言）
+        run: ${{ matrix.e2e }}
+      - name: 打包本平台发行物
+        # 无签名证书：Windows 不签 Authenticode，macOS 不公证（identity: null），
+        # 产物在 Release 说明里明确标注未签名
+        run: npx electron-builder --config.directories.output=out
+      - name: 产物冒烟（14 号文档 §3.3 发版门禁）
+        run: ${{ matrix.smoke }}
+      - name: 收集安装包
+        shell: bash
+        run: |
+          mkdir -p dist-assets
+          for pattern in ${{ matrix.packages }}; do mv $pattern dist-assets/; done
+          test -n "$(ls -A dist-assets)" || { echo "没有产出任何安装包"; exit 1; }
+          ls -l dist-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.os }}
+          path: dist-assets
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 汇总发布
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: 生成 sha256sums.txt（与既往版本同格式：<hash> *<文件名>）
+        working-directory: assets
+        run: |
+          sha256sum --binary * | sed 's/  /*/' > sha256sums.txt
+          cat sha256sums.txt
+      - name: 上传到 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="${TAG#refs/tags/}"
+          echo "发布目标 tag：$TAG"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            TITLE="$(git log -1 --format=%s "$TAG" | sed 's/^chore(release): //')"
+            gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" \
+              --draft --title "${TITLE:-$TAG}" --notes "由 release.yml 汇总的三平台产物，待人工确认后公开。"
+          fi

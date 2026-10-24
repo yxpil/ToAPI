@@ -47,6 +47,8 @@ export interface NotifyDeps {
   desktop?: DesktopHooks
   /** 每条入库后的回调，托盘用来刷新红点与菜单（15 号文档 §4） */
   onPosted?: (view: NotificationView) => void
+  /** 「关窗最小化到托盘」的默认值，由主进程按平台给出 */
+  closeToTrayByDefault?: boolean
   now?: () => number
   fetchImpl?: typeof fetch
 }
@@ -75,12 +77,19 @@ interface ChannelSettings {
   webhookTemplate: WebhookTemplate
 }
 
-const DEFAULT_CHANNELS: ChannelSettings = {
-  closeToTray: true,
+/**
+ * Linux 桌面环境（GNOME 等）常常没有可用的状态栏托盘：关窗隐藏就等于把应用藏没了，
+ * 所以托盘驻留只在 Windows/macOS 默认开，其他平台默认关但用户仍可手动打开。
+ */
+export const closeToTraySupported = (platform: string): boolean =>
+  platform === 'win32' || platform === 'darwin'
+
+const defaultChannels = (closeToTray: boolean): ChannelSettings => ({
+  closeToTray,
   stateChangeOnly: true,
   webhookUrl: '',
   webhookTemplate: 'raw',
-}
+})
 
 const LEVEL_ORDER: Record<NotifyLevel, number> = { info: 0, warn: 1, error: 2 }
 
@@ -125,7 +134,7 @@ export class NotifyService {
   private loadChannels(): ChannelSettings {
     if (this.channels) return this.channels
     this.channels = {
-      ...DEFAULT_CHANNELS,
+      ...defaultChannels(this.deps.closeToTrayByDefault ?? true),
       ...this.deps.repos.settings.get<Partial<ChannelSettings>>(CHANNELS_KEY, {}),
     }
     return this.channels

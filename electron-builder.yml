@@ -38,3 +38,43 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   artifactName: ${productName}-Setup-${version}-win-${arch}.${ext}
+
+# Linux 主流发行版（14 号文档 §3.1 P0）：AppImage 免依赖、deb/rpm 覆盖 UOS/麒麟与 Fedora/RHEL 系
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+    - target: tar.gz
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  category: Development
+  desktop:
+    Name: ToAPI
+    Comment: 本地 API 请求与测试工具
+    Categories: Development
+
+# macOS：无开发者证书 → 不出公证包，产物为未签名 dmg/zip，首次启动需右键打开绕过 Gatekeeper
+mac:
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  category: public.app-category.developer-tools
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}

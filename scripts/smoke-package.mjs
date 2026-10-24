@@ -23,6 +23,7 @@ const safeRm = (p) => {
 }
 
 const exe = resolve(exeArg)
+const IS_WINDOWS = process.platform === 'win32'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const version = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version
 const port = 9336
@@ -148,6 +149,15 @@ const report = {
 ws.close()
 child.kill()
 
+const shellOk = IS_WINDOWS
+  ? // Windows 用无边框窗口 + 自绘标题栏（06 号文档 §4）
+    report.titlebar?.height === 46 &&
+    report.titlebar?.buttons === 3 &&
+    report.titlebar?.logo?.complete === true &&
+    report.titlebar?.logo?.naturalWidth > 0
+  : // 其他平台保留系统原生装饰，界面里不该有自绘标题栏（14 号文档 §3.2）
+    report.titlebar === null
+
 const ok =
   report.handshake &&
   report.rootChildren > 0 &&
@@ -157,10 +167,7 @@ const ok =
   report.panels?.tree === '14px' &&
   report.panels?.editor === '14px' &&
   report.panels?.response === '14px' &&
-  report.titlebar?.height === 46 &&
-  report.titlebar?.buttons === 3 &&
-  report.titlebar?.logo?.complete === true &&
-  report.titlebar?.logo?.naturalWidth > 0
+  shellOk
 console.log(JSON.stringify({ ...report, verdict: ok ? 'PASS' : 'FAIL' }, null, 2))
 
 await wait(1500)

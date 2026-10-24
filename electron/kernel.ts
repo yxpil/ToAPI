@@ -75,6 +75,8 @@ export interface KernelOptions {
   headless?: boolean
   /** OS 原生通知与「窗口是否在前台」；无桌面环境（CLI、集成测试）不注入 */
   desktop?: DesktopHooks
+  /** 「关窗最小化到托盘」默认值：Linux 常无可用托盘，主进程按平台给出 */
+  closeToTrayByDefault?: boolean
   /** 通知入库回调：主进程用它刷新托盘红点与菜单 */
   onNotification?: (view: NotificationView) => void
   /** Webhook 投递用的 fetch，测试注入桩实现 */
@@ -100,6 +102,7 @@ export function createKernel(options: KernelOptions): Kernel {
     emit,
     desktop: options.desktop,
     onPosted: options.onNotification,
+    closeToTrayByDefault: options.closeToTrayByDefault,
     fetchImpl: options.fetchImpl,
   })
   const runner = new RunnerFlow({
