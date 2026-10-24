@@ -36,4 +36,7 @@ jobs:
       - name: 门禁 = typecheck + lint + prettier + check-channels + 全部测试
         run: npm run gate
       - name: 无头 CLI 自举（23 号文档 §5.3）
-        run: node bin/toapi.cjs --version
+        # bin/toapi.cjs 是 dist-electron/cli.cjs 的壳，全新检出必须先构建
+        run: |
+          npm run build:electron
+          node bin/toapi.cjs --version

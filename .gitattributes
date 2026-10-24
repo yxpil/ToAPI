@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# 打包与脚本类二进制不做换行转换
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.zip binary
+*.exe binary
+*.AppImage binary
+*.deb binary
+*.rpm binary
+*.dmg binary
+*.blockmap binary
+*.asar binary
