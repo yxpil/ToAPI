@@ -4,6 +4,7 @@ import type { TreeCollectionNode } from '@shared/types'
 import type { IconName } from './Icon'
 import { Icon } from './Icon'
 import { useApp } from '../stores/app.store'
+import { useOpen } from '../stores/open.store'
 import { useRunner } from '../stores/runner.store'
 
 interface Props {
@@ -138,6 +139,12 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
         hint: 'Ctrl+`',
         icon: 'panel',
         run: toggleOrientation,
+      },
+      {
+        id: 'open-settings',
+        label: '开放调用设置（HTTP API / MCP）',
+        icon: 'send',
+        run: () => useOpen.getState().setSettingsOpen(true),
       },
     )
 

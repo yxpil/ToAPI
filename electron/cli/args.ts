@@ -1,8 +1,10 @@
 // @author yxpil
-export type ReporterKind = 'cli' | 'json' | 'junit' | 'html'
+import { existsSync } from 'node:fs'
+import { resolve as resolvePath } from 'node:path'
 
+export type ReporterKind = 'cli' | 'json' | 'junit' | 'html'
 export interface CliOptions {
-  command: 'run' | 'help' | 'version'
+  command: 'run' | 'help' | 'version' | 'mcp' | 'serve'
   file?: string
   db?: string
   project?: string
@@ -20,6 +22,9 @@ export interface CliOptions {
   junitExport?: string
   htmlExport?: string
   quiet: boolean
+  /** 开放通道：调用密码与端口（mcp / serve 用） */
+  token?: string
+  port?: number
 }
 
 /** 用法错误 → 退出码 2（23 号文档 §5.3） */
@@ -32,6 +37,8 @@ export const USAGE = `ToAPI CLI — 本地无头运行集合（23 号文档 §5.
 用法：
   toapi run <postman_collection.json | project.tapi> [选项]
   toapi run --db <toapi.db> --project <名称|ID> [选项]
+  toapi mcp  --db <toapi.db> [--token <调用密码>]      MCP stdio 服务（AI 客户端拉起）
+  toapi serve --db <toapi.db> [--port 4730] [--token <调用密码>]  常驻 Local HTTP API
 
 选项：
   --db <path>                    直接打开已有的 ToAPI 数据库（与位置参数互斥）
@@ -50,8 +57,12 @@ export const USAGE = `ToAPI CLI — 本地无头运行集合（23 号文档 §5.
   --reporter-junit-export <path> JUnit 报告输出路径（默认 toapi-junit.xml）
   --reporter-html-export <path>  HTML 报告输出路径（默认 toapi-report.html）
   --quiet                        只输出汇总与错误
+  --token <调用密码>              mcp / serve：本次连接使用的密码（只校验，不改配置）
+  --port <端口>                   serve：临时覆盖监听端口
   -h, --help                     显示帮助
   -v, --version                  显示版本
+
+开关与调用密码在 GUI「设置 → 开放调用」里配置，无头模式沿用同一份配置（11 号文档 §0）。
 
 退出码：0 全部通过（允许跳过） / 1 存在失败 / 2 用法或 IO 错误
 `
@@ -144,6 +155,14 @@ export const parseArgs = (argv: string[]): CliOptions => {
         opts.reporters = needReporters(needValue(arg, argv, i))
         i += 1
         break
+      case '--token':
+        opts.token = needValue(arg, argv, i)
+        i += 1
+        break
+      case '--port':
+        opts.port = needInt(arg, needValue(arg, argv, i))
+        i += 1
+        break
       case '--reporter-json-export':
         opts.jsonExport = needValue(arg, argv, i)
         i += 1
@@ -163,6 +182,14 @@ export const parseArgs = (argv: string[]): CliOptions => {
   }
 
   if (opts.command !== 'run') return opts
+
+  if (positional[0] === 'mcp' || positional[0] === 'serve') {
+    opts.command = positional[0]
+    if (!opts.db) throw new CliUsageError(`${positional[0]} 需要 --db 指定 ToAPI 数据库`)
+    if (!existsSync(resolvePath(opts.db)))
+      throw new CliUsageError(`数据库不存在：${resolvePath(opts.db)}`)
+    return opts
+  }
 
   const [first, second] = positional
   if (first !== undefined && first !== 'run') throw new CliUsageError(`未知命令：${first}`)

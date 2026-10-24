@@ -321,6 +321,56 @@ export interface TapiImportResult {
   inspection: TapiInspection
 }
 
+// ── 开放调用通道（11 号文档 §6）──
+
+/** loopback 只监听 127.0.0.1；lan 需要用户在设置里二次确认 */
+export type OpenAccessMode = 'loopback' | 'lan'
+
+export interface OpenConfigView {
+  enabled: boolean
+  running: boolean
+  port: number
+  access: OpenAccessMode
+  ratePerMin: number
+  hasPassword: boolean
+  passwordSetAt: number | null
+  baseUrl: string
+}
+
+export interface OpenClientView {
+  id: string
+  name: string
+  kind: 'http' | 'mcp'
+  authorizedAt: number
+  lastSeenAt: number
+}
+
+export interface OpenCallLogView {
+  id: string
+  channel: 'http' | 'mcp'
+  tool: string
+  client: string
+  paramsSummary: string
+  ok: boolean
+  errorCode: string | null
+  timeMs: number
+  createdAt: number
+}
+
+export interface OpenSetConfigInput {
+  enabled?: boolean
+  port?: number
+  access?: OpenAccessMode
+  ratePerMin?: number
+  /** 非空 = 自定义调用密码；空串 = 清除密码并关闭通道 */
+  password?: string
+}
+
+export interface OpenApprovalInput {
+  clientId: string
+  approve: boolean
+}
+
 // ── channel → 载荷映射（18 号文档 §1.2）──
 
 export interface ChannelMap {
@@ -370,6 +420,13 @@ export interface ChannelMap {
   'tapi:export': { req: TapiExportInput; res: TapiExportResult }
   'tapi:inspect': { req: TapiSource; res: TapiInspection }
   'tapi:import': { req: TapiImportInput; res: TapiImportResult }
+  'open:get-config': { req: Record<string, never>; res: OpenConfigView }
+  'open:set-config': { req: OpenSetConfigInput; res: OpenConfigView }
+  'open:rotate-token': { req: Record<string, never>; res: { password: string } }
+  'open:list-clients': { req: Record<string, never>; res: OpenClientView[] }
+  'open:revoke-client': { req: IdInput; res: void }
+  'open:call-log': { req: { limit?: number }; res: OpenCallLogView[] }
+  'open:approval-result': { req: OpenApprovalInput; res: void }
   'window:get-state': { req: Record<string, never>; res: WindowState }
   'window:minimize': { req: Record<string, never>; res: void }
   'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
@@ -423,6 +480,13 @@ export const CHANNELS = [
   'tapi:export',
   'tapi:inspect',
   'tapi:import',
+  'open:get-config',
+  'open:set-config',
+  'open:rotate-token',
+  'open:list-clients',
+  'open:revoke-client',
+  'open:call-log',
+  'open:approval-result',
   'window:get-state',
   'window:minimize',
   'window:toggle-maximize',
@@ -444,12 +508,24 @@ export interface EventMap {
   'event:runner-progress': { runId: string; item: RunnerItemView; finished: boolean }
   /** 最大化/还原后同步标题栏图标；双击拖拽区触发的系统行为也要覆盖 */
   'event:window-state': WindowState
+  /** 外部客户端首次连接，等待用户在 GUI 授权（11 号文档 §2.3） */
+  'event:open-approval': {
+    clientId: string
+    name: string
+    kind: 'http' | 'mcp'
+    /** 授权原因说明：新客户端接入或越界 host 确认 */
+    detail: string
+    /** 授权通过后自动随附的 Skill 说明书摘要，让用户知道会交出什么内容 */
+    skillPreview: string
+    createdAt: number
+  }
 }
 
 export const EVENT_CHANNELS = [
   'event:send-progress',
   'event:runner-progress',
   'event:window-state',
+  'event:open-approval',
 ] as const satisfies readonly (keyof EventMap)[]
 
 export type EventName = (typeof EVENT_CHANNELS)[number]

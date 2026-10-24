@@ -92,7 +92,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `apifox:inspect / apifox:import / apifox:export`（**B4 规划**，前置条件：用户提供真实 Apifox 导出样本） | 见 23 号文档 §7.1 / §8 | |
 | `case:run` / `codegen:from-api` / `codegen:to-api` / `testgen:from-history` / `python:detect` | 见 09 号文档 §7 | |
 | `md:interpret` / `md:open` / `md:run` / `md:sync` | 见 10 号文档 §2.3 / §4 / §5 | |
-| `open:get-config` / `open:set-config` / `open:rotate-token` / `open:list-clients` / `open:revoke-client` / `open:call-log` | 见 11 号文档 §6 | |
+| `open:get-config` / `open:set-config` / `open:rotate-token` / `open:list-clients` / `open:revoke-client` / `open:call-log` / `open:approval-result`（+ 事件 `event:open-approval`） | 见 11 号文档 §6 | 设置面板与授权条的唯一后端；`rotate-token` 的新密码只在该次返回值里出现 |
 | `task:*` / `macro:*`（CRUD、preview、run-now、system-register） | 见 12 号文档 §4 | |
 | `load:run` / `load:cancel` / `load:get` / `load:compare` / `event:load-tick` | 见 13 号文档 §3 | |
 | `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-rules` / `notify:set-rules` / `notify:test-webhook` / `event:notify` | 见 15 号文档 §6 | |
@@ -160,6 +160,8 @@ type SendResult = {
 | `SCRIPT_TIMEOUT` | 脚本熔断 | 同上 |
 | `CANCELLED` | 用户取消 | 静默 |
 | `DB` | SQLite 错误 | 弹错 + 引导备份 |
+| `FORBIDDEN` | 仅开放通道：密码缺失/客户端未授权/host 越界被拒 | HTTP 403，MCP 以 `isError` 返回 |
+| `RATE_LIMIT` | 仅开放通道：超出限流（11 号文档 §1.3） | HTTP 429，提示稍后重试 |
 
 ## 6. 规范细则
 

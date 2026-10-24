@@ -1237,6 +1237,90 @@ select option::checkmark {
   font-size: 12px;
   color: var(--err);
 }
+/* 开放调用（11 号文档 §0）：设置面板分组与授权条 */
+.open-revealed {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.open-revealed code {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.open-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-2);
+}
+.open-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 12px;
+  min-height: 28px;
+}
+.open-row .label {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.open-row .meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.open-snippet {
+  margin: 0;
+  padding: var(--sp-2) 10px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.open-approval {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  width: min(620px, calc(100vw - 32px));
+  padding: var(--sp-4);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.open-approval-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.open-approval-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex: none;
+}
 .postman-dialog .dialog-title {
   margin-bottom: 0;
 }

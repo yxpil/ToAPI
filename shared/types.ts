@@ -281,6 +281,8 @@ export type IpcErrorCode =
   | 'CANCELLED'
   | 'DB'
   | 'FORBIDDEN'
+  /** 仅开放通道使用：超出限流（11 号文档 §1.3） */
+  | 'RATE_LIMIT'
   | 'INTERNAL'
 
 export interface IpcError {

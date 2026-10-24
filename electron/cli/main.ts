@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { IpcErrorRaised } from '@shared/types'
 import { createKernel, type Kernel } from '../kernel'
+import { serveMcpStdio } from '../open/mcp'
 import { readDataFile } from '../flow/data-file'
 import type { RunnerItem, RunnerRun } from '../db/repo/runner.repo'
 import { CliUsageError, USAGE, parseArgs, type CliOptions } from './args'
@@ -180,6 +181,62 @@ const writeReports = (opts: CliOptions, run: RunnerRun): string[] => {
   return written
 }
 
+const headlessKernel = (opts: CliOptions): Kernel => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'toapi-open-'))
+  return createKernel({
+    dbPath: resolvePath(opts.db ?? ''),
+    filesDir: tempDir,
+    appVersion: version(),
+    scriptWorkerPath: scriptWorkerPath(),
+    headless: true,
+  })
+}
+
+const requireOpenReady = (kernel: Kernel): void => {
+  if (!kernel.open.config.isEnabled())
+    throw new CliUsageError(
+      '开放通道未启用或未设置调用密码：请先在 ToAPI 界面「设置 → 开放调用」完成配置',
+    )
+}
+
+/** stdio MCP：AI 客户端把它当子进程拉起，读的是用户真实的 ToAPI 库（11 号文档 §2.1） */
+const runMcp = async (opts: CliOptions): Promise<number> => {
+  const kernel = headlessKernel(opts)
+  requireOpenReady(kernel)
+  const secret = opts.token ?? process.env.TOAPI_OPEN_SECRET ?? null
+  serveMcpStdio(process.stdin, process.stdout, {
+    service: kernel.open,
+    appVersion: version(),
+    secret,
+  })
+  process.stderr.write('ToAPI MCP 已就绪（stdio）\n')
+  await new Promise<void>((resolve) => {
+    process.stdin.once('end', () => resolve())
+    process.stdin.once('close', () => resolve())
+  })
+  kernel.dispose()
+  return 0
+}
+
+/** 常驻 Local HTTP API：同一端口同时提供 /mcp 的 Streamable HTTP */
+const runServe = async (opts: CliOptions): Promise<number> => {
+  const kernel = headlessKernel(opts)
+  requireOpenReady(kernel)
+  if (opts.port) kernel.open.config.setPort(opts.port)
+  const state = await kernel.syncOpenEndpoint()
+  process.stdout.write(
+    `ToAPI Local HTTP API：${kernel.http.address ?? state.port}\n` +
+      `  健康检查 GET ${kernel.http.address}/v1/health ｜ 其余端点需 Authorization: Bearer <调用密码>\n`,
+  )
+  await new Promise<void>((resolve) => {
+    process.once('SIGINT', () => resolve())
+    process.once('SIGTERM', () => resolve())
+  })
+  await kernel.http.stop()
+  kernel.dispose()
+  return 0
+}
+
 const runOnce = async (opts: CliOptions): Promise<number> => {
   const tempDir = mkdtempSync(join(tmpdir(), 'toapi-cli-'))
   let plannedIterations = opts.iterationCount ?? 1
@@ -242,6 +299,8 @@ export const runCli = async (argv: string[]): Promise<number> => {
     out(`toapi ${version()}`)
     return 0
   }
+  if (opts.command === 'mcp') return await runMcp(opts)
+  if (opts.command === 'serve') return await runServe(opts)
 
   try {
     return await runOnce(opts)

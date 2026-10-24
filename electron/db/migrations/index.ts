@@ -166,6 +166,24 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX runner_item_run_idx ON runner_item(run_id, iteration, sort_order);
     `,
   },
+  {
+    version: 5,
+    name: '005_open_channel',
+    up: `
+      CREATE TABLE external_call_log (
+        id TEXT PRIMARY KEY,
+        channel TEXT NOT NULL,
+        tool TEXT NOT NULL,
+        client TEXT NOT NULL DEFAULT '',
+        params_summary TEXT NOT NULL DEFAULT '',
+        ok INTEGER NOT NULL DEFAULT 1,
+        error_code TEXT,
+        time_ms REAL NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX external_call_created_idx ON external_call_log(created_at DESC);
+    `,
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)

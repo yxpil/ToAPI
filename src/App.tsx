@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import type { AppHello } from '@shared/channels'
 import type { ProjectNode, TreeCollectionNode } from '@shared/types'
 import { useApp } from './stores/app.store'
+import { useOpen } from './stores/open.store'
 import { useRunner } from './stores/runner.store'
 import { useWindow } from './stores/window.store'
 import { invoke, useEvent } from './lib/ipc'
@@ -15,6 +16,7 @@ import { ResponsePane } from './features/response/ResponsePane'
 import { RunnerPane } from './features/runner/RunnerPane'
 import { PostmanImport } from './features/postman/PostmanImport'
 import { TapiImport } from './features/tapi/TapiImport'
+import { OpenApprovalBar, OpenSettings } from './features/open/OpenSettings'
 import { Icon } from './components/Icon'
 import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
@@ -54,6 +56,7 @@ function TitleBar() {
     void init()
   }, [init])
   useEvent('event:window-state', (state) => setMaximized(state.maximized))
+  useEvent('event:open-approval', (pending) => useOpen.getState().apply(pending))
 
   return (
     <header className="titlebar" data-testid="titlebar">
@@ -217,6 +220,7 @@ export default function App() {
 
   useEffect(() => {
     void boot()
+    void useOpen.getState().load()
     void invoke('app:hello', {})
       .then(setHello)
       .catch(() => setHello(null))
@@ -414,6 +418,9 @@ export default function App() {
       />
 
       <TapiImport open={tapiImportOpen} onClose={closeTapiImport} />
+
+      <OpenSettings />
+      <OpenApprovalBar />
 
       {toast && (
         <div className={`toast${toast.kind === 'error' ? ' error' : ''}`} role="status">

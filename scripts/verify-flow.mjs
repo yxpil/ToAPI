@@ -733,6 +733,55 @@ try {
   )
   await app.waitFor(`!!document.querySelector('[data-testid^="api-"]')`, '原项目接口树可见')
 
+  // ── 开放调用设置（11 号文档 §7、06 号文档 §3.9）：密码闸门在 UI 上的表现 ──
+  await app.js(`window.__h.key('k', { ctrlKey: true })`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="command-palette"]')`,
+    '命令面板（开放调用）',
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '开放调用设置')`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('开放调用设置'))`,
+    '命令面板能找到开放调用设置',
+  )
+  await app.js(
+    `document.querySelector('[aria-label="命令"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`,
+  )
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="open-settings"]')`,
+    '开放调用设置面板打开',
+  )
+  report.openGateBefore = await app.js(`(() => {
+    const box = document.querySelector('[data-testid="open-enabled"]')
+    return {
+      disabled: box?.disabled ?? null,
+      hint: document.querySelector('[data-testid="open-settings"]')?.innerText.includes('未设置调用密码') ?? false,
+    }
+  })()`)
+  if (report.openGateBefore.disabled !== true || report.openGateBefore.hint !== true) {
+    throw new Error(`未设密码时启用开关应被锁住：${JSON.stringify(report.openGateBefore)}`)
+  }
+  await app.js(
+    `window.__h.set(document.querySelector('[aria-label="新调用密码"]'), 'flow-verify-secret')`,
+  )
+  await app.js(`window.__h.click('应用调用密码')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="open-enabled"]')?.disabled === false`,
+    '设置密码后启用开关解锁',
+  )
+  report.openGateAfter = await app.js(
+    `document.querySelector('[data-testid="open-enabled"]')?.disabled ?? null`,
+  )
+  if (report.openGateAfter !== false) throw new Error('设置密码后应允许启用开放通道')
+  await app.js(`document.querySelector('[data-testid="open-enabled"]').click()`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="open-enabled"]')?.checked === true`,
+    '开放通道开关已打开',
+  )
+  report.openSnippet = await app.js(`document.querySelector('.open-snippet')?.innerText ?? null`)
+  await app.js(`document.querySelector('[data-testid="open-close"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="open-settings"]')`, '开放调用设置关闭')
+
   // ── 树拖拽排序并持久化（07 号文档 §3）──
   await app.js(`window.__h.click('新建接口')`)
   await app.waitFor(`window.__h.val('接口名称') === '新接口'`, '第二个接口草稿', 20000)

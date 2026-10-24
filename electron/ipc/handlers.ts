@@ -8,6 +8,7 @@ import { parseDataAuto } from '../flow/data-file'
 import type { CancelRegistry } from '../infra/cancel-registry'
 import type { PostmanService } from '../postman/service'
 import type { TapiService } from '../tapi/service'
+import type { OpenService } from '../open/service'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
 
@@ -25,6 +26,9 @@ export interface HandlerDeps {
   runner: RunnerFlow
   postman: PostmanService
   tapi: TapiService
+  open: OpenService
+  /** 起停 Local HTTP API；改完配置必须调它，端口/开关才会真正生效 */
+  syncOpenEndpoint: () => Promise<{ running: boolean; port: number }>
   cancel: CancelRegistry
   hello: AppHello
   /** 每次握手实时读取，底栏显示当前库大小（06 号文档 §4） */
@@ -209,6 +213,32 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     'tapi:export': (req) => deps.tapi.export(req),
     'tapi:inspect': (req) => deps.tapi.inspect(req),
     'tapi:import': (req) => deps.tapi.import(req),
+
+    'open:get-config': () => deps.open.view(),
+    'open:set-config': async (req) => {
+      const config = deps.open.config
+      if (typeof req.password === 'string') config.setPassword(req.password)
+      if (typeof req.port === 'number') config.setPort(req.port)
+      if (typeof req.access === 'string') config.setAccess(req.access)
+      if (typeof req.ratePerMin === 'number') config.setRatePerMin(req.ratePerMin)
+      if (typeof req.enabled === 'boolean') config.setEnabled(req.enabled)
+      await deps.syncOpenEndpoint()
+      return deps.open.view()
+    },
+    'open:rotate-token': async () => {
+      // 新密码只在这里返回一次，UI 显示后不再可取（11 号文档 §1.1）
+      const password = deps.open.config.generatePassword()
+      await deps.syncOpenEndpoint()
+      return { password }
+    },
+    'open:list-clients': () => deps.open.clients(),
+    'open:revoke-client': (req) => {
+      deps.open.config.revokeClient(req.id)
+    },
+    'open:call-log': (req) => deps.open.callLog(req.limit ?? 100),
+    'open:approval-result': (req) => {
+      deps.open.approvalResult(req)
+    },
 
     'window:get-state': () => ({ maximized: win.isMaximized() }),
     'window:minimize': () => {

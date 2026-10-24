@@ -98,6 +98,14 @@ void app.whenReady().then(() => {
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })
   log.info('kernel ready', kernel.hello)
+
+  // 开放通道：配置里开着就随应用启动监听（11 号文档 §1）；MCP stdio 走 `toapi mcp`（无头 CLI）
+  void kernel
+    .syncOpenEndpoint()
+    .then((state) => {
+      if (state.running) log.info(`开放通道已监听 ${kernel?.http.address ?? state.port}`)
+    })
+    .catch((e: Error) => log.error(`开放通道启动失败：${e.message}`))
   createWindow()
 
   app.on('activate', () => {
