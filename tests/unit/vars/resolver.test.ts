@@ -1,3 +1,4 @@
+// @author yxpil
 import { describe, expect, it } from 'vitest'
 import { findVarNames, mapLookup, resolveVars } from '@main/vars/resolver'
 

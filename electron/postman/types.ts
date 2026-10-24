@@ -1,3 +1,4 @@
+// @author yxpil
 import type { Api, Auth, CollectionVariable, Extractor, FakeConfig } from '@shared/types'
 import type { PostmanWarning } from '@shared/types'
 

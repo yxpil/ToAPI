@@ -1,3 +1,4 @@
+// @author yxpil
 import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
 import { IpcErrorRaised } from '@shared/types'

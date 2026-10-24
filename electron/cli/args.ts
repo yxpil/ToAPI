@@ -1,3 +1,4 @@
+// @author yxpil
 export type ReporterKind = 'cli' | 'json' | 'junit' | 'html'
 
 export interface CliOptions {

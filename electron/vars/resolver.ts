@@ -1,3 +1,4 @@
+// @author yxpil
 const TOKEN_SOURCE = '\\{\\{\\s*(\\$?[A-Za-z0-9_.\\-]+)\\s*\\}\\}'
 
 const tokenRe = (): RegExp => new RegExp(TOKEN_SOURCE, 'g')

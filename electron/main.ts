@@ -1,3 +1,4 @@
+// @author yxpil
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'

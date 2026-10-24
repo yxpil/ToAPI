@@ -1,3 +1,4 @@
+// @author yxpil
 import { spawn } from 'node:child_process'
 import { mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'

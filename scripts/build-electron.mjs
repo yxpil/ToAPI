@@ -1,3 +1,4 @@
+// @author yxpil
 import { build } from 'esbuild'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

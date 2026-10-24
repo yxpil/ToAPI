@@ -1,3 +1,4 @@
+// @author yxpil
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase, userVersion, type Db } from './db/database'

@@ -1,3 +1,4 @@
+// @author yxpil
 /** 纯 UI 偏好（栏宽、分屏方向）只影响渲染进程，落在 localStorage，不进 SQLite 契约 */
 const PREFIX = 'toapi.ui.'
 

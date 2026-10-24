@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @author yxpil
 'use strict'
 
 const { existsSync } = require('node:fs')

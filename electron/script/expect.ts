@@ -1,3 +1,4 @@
+// @author yxpil
 /** pm.expect 的 chai 链式子集（23 号文档 §4.3） */
 
 export class AssertionError extends Error {

@@ -1,3 +1,4 @@
+// @author yxpil
 import { contextBridge, ipcRenderer } from 'electron'
 import { CHANNELS, EVENT_CHANNELS } from '@shared/channels'
 

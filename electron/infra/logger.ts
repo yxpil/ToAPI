@@ -1,3 +1,4 @@
+// @author yxpil
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export interface Logger {

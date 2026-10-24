@@ -1,3 +1,4 @@
+// @author yxpil
 import type { Auth, FakeConfig, HttpMethod } from '@shared/types'
 
 /** 脚本宿主 ↔ worker 的消息协议（05 号文档 §2，17 号文档 §3.1 第 3/6 步） */

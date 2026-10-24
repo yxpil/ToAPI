@@ -1,3 +1,4 @@
+// @author yxpil
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 

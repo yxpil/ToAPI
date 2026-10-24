@@ -1,3 +1,4 @@
+// @author yxpil
 import { JSONPath } from 'jsonpath-plus'
 import type { Extractor, ExtractorScope } from '@shared/types'
 

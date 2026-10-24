@@ -1,3 +1,4 @@
+// @author yxpil
 import { randomUUID } from 'node:crypto'
 
 /** Postman 动态变量（23 号文档 §4.5）：每次取值独立求值，未知名返回 undefined */

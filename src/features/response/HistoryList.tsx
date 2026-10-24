@@ -1,3 +1,4 @@
+// @author yxpil
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HistorySummary } from '@shared/types'
 import { useApp } from '../../stores/app.store'

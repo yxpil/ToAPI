@@ -1,3 +1,4 @@
+// @author yxpil
 import { parentPort } from 'node:worker_threads'
 import { createHash, createHmac, randomUUID } from 'node:crypto'
 import vm from 'node:vm'

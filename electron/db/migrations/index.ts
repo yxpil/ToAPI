@@ -1,3 +1,4 @@
+// @author yxpil
 // 迁移脚本以 TS 常量内嵌，避免打包后读不到 .sql 文件（18 号文档 §3.4）
 export interface Migration {
   version: number

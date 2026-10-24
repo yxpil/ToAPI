@@ -1,3 +1,4 @@
+// @author yxpil
 import type { RunnerItem, RunnerRun } from '../db/repo/runner.repo'
 
 /** CLI 与报告渲染（23 号文档 §5.3）：纯函数，便于单测；文本一律 ASCII 标记，不用 emoji */

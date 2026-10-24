@@ -1,3 +1,4 @@
+// @author yxpil
 import { useEffect, useRef } from 'react'
 import type { ChannelName, EventName, EventPayload, ReqOf, ResOf } from '@shared/channels'
 import type { IpcError, IpcResult } from '@shared/types'

@@ -1,3 +1,4 @@
+// @author yxpil
 export type Row = Record<string, number | bigint | string | null | Uint8Array | undefined>
 
 export const parseJson = <T>(text: string, fallback: T): T => {

@@ -1,3 +1,4 @@
+// @author yxpil
 /** 加载态（06 号文档 §3.9）：12px SVG 细线圆环，CSS 旋转，不用 GIF/边框模拟 */
 export function Spinner({ label = '加载中' }: { label?: string }) {
   return (

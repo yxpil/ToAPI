@@ -1,3 +1,4 @@
+// @author yxpil
 interface CookieRecord {
   name: string
   value: string

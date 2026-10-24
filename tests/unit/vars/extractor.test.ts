@@ -1,3 +1,4 @@
+// @author yxpil
 import { describe, expect, it } from 'vitest'
 import { preview, runAll, runExtractor, type ExtractSource } from '@main/vars/extractor'
 import type { Extractor } from '@shared/types'

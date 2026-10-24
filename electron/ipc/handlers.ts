@@ -1,3 +1,4 @@
+// @author yxpil
 import type { AppHello } from '@shared/channels'
 import { IpcErrorRaised } from '@shared/types'
 import type { Repos } from '../db/repo'

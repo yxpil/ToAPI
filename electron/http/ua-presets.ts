@@ -1,3 +1,4 @@
+// @author yxpil
 // UA 预设库（05 号文档 §3）。随版本更新维护，UI 伪装面板与脚本共用。
 export const UA_PRESETS = {
   'chrome-win':

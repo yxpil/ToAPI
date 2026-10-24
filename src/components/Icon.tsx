@@ -1,3 +1,4 @@
+// @author yxpil
 import type { CSSProperties } from 'react'
 
 /** 内联 SVG 图标注册表（06 号文档 §3.8）：viewBox 24、stroke 1.5、currentColor，禁 emoji */

@@ -1,3 +1,4 @@
+// @author yxpil
 import type { AssertionResult, LogEntry } from '@shared/types'
 import { IpcErrorRaised } from '@shared/types'
 import type { EventName, EventPayload } from '@shared/channels'

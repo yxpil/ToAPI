@@ -1,3 +1,4 @@
+// @author yxpil
 import { Worker } from 'node:worker_threads'
 import type { AssertionResult, FakeConfig, LogEntry } from '@shared/types'
 import type {

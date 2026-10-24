@@ -1,3 +1,4 @@
+// @author yxpil
 import type { Db } from '../database'
 import type { Variable, VarScope } from '@shared/types'
 import { ulid } from '../../infra/id'

@@ -1,3 +1,4 @@
+// @author yxpil
 export class CancelRegistry {
   private readonly controllers = new Map<string, AbortController>()
 

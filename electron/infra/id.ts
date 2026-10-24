@@ -1,3 +1,4 @@
+// @author yxpil
 import { randomBytes } from 'node:crypto'
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'

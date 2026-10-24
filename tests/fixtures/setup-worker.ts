@@ -1,3 +1,4 @@
+// @author yxpil
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'

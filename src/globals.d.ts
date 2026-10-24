@@ -1,3 +1,4 @@
+// @author yxpil
 import type { IpcResult } from '@shared/types'
 
 declare global {

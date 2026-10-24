@@ -1,3 +1,4 @@
+// @author yxpil
 import { createHash } from 'node:crypto'
 import {
   CHANNELS,
