@@ -106,6 +106,13 @@ await new Promise((r) => echo.listen(0, '127.0.0.1', r))
 const echoPort = echo.address().port
 
 let child = null
+/** CI 上定位卡点用：记录最后一步等待的语义标签，并对 CDP 请求加硬超时 */
+let lastStep = '启动应用'
+let jsCalls = 0
+const markStep = (label) => {
+  lastStep = label
+  process.stderr.write(`[verify-flow] 等待：${label}\n`)
+}
 const launch = async () => {
   child = spawn(
     electronBin,
@@ -162,6 +169,12 @@ const launch = async () => {
       const id = ++seq
       pending.set(id, { res: r, rej: j })
       ws.send(JSON.stringify({ id, method, params }))
+      // 渲染进程或主进程卡死时 CDP 永远不返回；没有这个超时就只能等 CI 把 job 跑到 40 分钟
+      setTimeout(() => {
+        if (!pending.has(id)) return
+        pending.delete(id)
+        j(new Error(`CDP ${method} 30s 未返回（最后一步：${lastStep}）`))
+      }, 30_000).unref()
     })
 
   await send('Runtime.enable')
@@ -189,6 +202,7 @@ const launch = async () => {
   })
 
   const js = async (expression) => {
+    jsCalls += 1
     const { result, exceptionDetails } = await send('Runtime.evaluate', {
       expression,
       returnByValue: true,
@@ -197,6 +211,7 @@ const launch = async () => {
     return result.value
   }
   const waitFor = async (expression, label, timeoutMs = 20000) => {
+    markStep(label)
     for (let waited = 0; waited < timeoutMs; waited += 250) {
       if (await js(`!!(${expression})`)) return true
       await wait(250)
@@ -220,6 +235,15 @@ const closeApp = async (app) => {
   child = null
   await wait(300)
 }
+
+/** 总时长看门狗：卡死时打印最后一步再退出，不让 CI 干等到 job 超时被系统取消 */
+const HARD_LIMIT_MS = 12 * 60_000
+const watchdog = setTimeout(() => {
+  console.error(
+    `[verify-flow] 超过 ${HARD_LIMIT_MS / 60000} 分钟未完成：第 ${jsCalls} 次求值，最后一步「${lastStep}」`,
+  )
+  process.exit(1)
+}, HARD_LIMIT_MS)
 
 try {
   // ── 第一轮：建项目 → 建接口 → 发请求 ──
@@ -1708,6 +1732,7 @@ try {
   }
   app.ws.close()
 } finally {
+  clearTimeout(watchdog)
   await closeApp()
   echo.close()
 }
