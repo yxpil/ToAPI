@@ -4,13 +4,15 @@ import type { TreeCollectionNode } from '@shared/types'
 import type { IconName } from './Icon'
 import { Icon } from './Icon'
 import { useApp } from '../stores/app.store'
+import { useNotify } from '../stores/notify.store'
 import { useOpen } from '../stores/open.store'
 import { useRunner } from '../stores/runner.store'
+import type { Pane } from '../App'
 
 interface Props {
   open: boolean
   onClose: () => void
-  setPane: (pane: 'response' | 'runner') => void
+  setPane: (pane: Pane) => void
   toggleOrientation: () => void
 }
 
@@ -133,6 +135,19 @@ export function CommandPalette({ open, onClose, setPane, toggleOrientation }: Pr
         run: () => setPane('response'),
       },
       { id: 'pane-runner', label: '显示 Runner 面板', icon: 'panel', run: () => setPane('runner') },
+      { id: 'pane-task', label: '显示定时任务面板', icon: 'clock', run: () => setPane('task') },
+      {
+        id: 'notify-center',
+        label: '打开通知中心',
+        icon: 'bell',
+        run: () => void useNotify.getState().open(),
+      },
+      {
+        id: 'notify-settings',
+        label: '通知设置（托盘 / Webhook）',
+        icon: 'bell',
+        run: () => void useNotify.getState().setSettingsOpen(true),
+      },
       {
         id: 'orientation',
         label: '切换响应面板方向',

@@ -184,6 +184,46 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX external_call_created_idx ON external_call_log(created_at DESC);
     `,
   },
+  {
+    version: 6,
+    name: '006_schedule_notify',
+    up: `
+      CREATE TABLE schedule_task (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        spec_json TEXT NOT NULL,
+        env_id TEXT,
+        overlap TEXT NOT NULL DEFAULT 'skip',
+        misfire TEXT NOT NULL DEFAULT 'run-on-launch',
+        notify_json TEXT NOT NULL DEFAULT '{"onSuccess":true,"onFail":true,"report":"none"}',
+        last_run_at INTEGER,
+        last_run_id TEXT,
+        last_failed INTEGER,
+        next_run_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX schedule_task_due_idx ON schedule_task(enabled, next_run_at);
+
+      CREATE TABLE notification (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        level TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
+        source_type TEXT,
+        source_id TEXT,
+        read INTEGER NOT NULL DEFAULT 0,
+        count INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX notification_read_idx ON notification(read, created_at DESC);
+      CREATE INDEX notification_type_idx ON notification(type, created_at DESC);
+    `,
+  },
 ]
 
 export const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0)

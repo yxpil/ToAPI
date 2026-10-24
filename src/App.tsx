@@ -4,8 +4,10 @@ import type { CSSProperties } from 'react'
 import type { AppHello } from '@shared/channels'
 import type { ProjectNode, TreeCollectionNode } from '@shared/types'
 import { useApp } from './stores/app.store'
+import { useNotify } from './stores/notify.store'
 import { useOpen } from './stores/open.store'
 import { useRunner } from './stores/runner.store'
+import { useTasks } from './stores/task.store'
 import { useWindow } from './stores/window.store'
 import { invoke, useEvent } from './lib/ipc'
 import { formatBytes } from './lib/format'
@@ -14,13 +16,22 @@ import { TreePane } from './features/tree/TreePane'
 import { EditorPane } from './features/editor/EditorPane'
 import { ResponsePane } from './features/response/ResponsePane'
 import { RunnerPane } from './features/runner/RunnerPane'
+import { TaskPane } from './features/task/TaskPane'
 import { PostmanImport } from './features/postman/PostmanImport'
 import { TapiImport } from './features/tapi/TapiImport'
 import { OpenApprovalBar, OpenSettings } from './features/open/OpenSettings'
+import {
+  NotificationCenter,
+  NotificationBell,
+  NotifyToast,
+} from './features/notify/NotificationCenter'
+import { NotifySettings } from './features/notify/NotifySettings'
 import { Icon } from './components/Icon'
 import { Splitter } from './components/Splitter'
 import { CommandPalette } from './components/CommandPalette'
 import logoUrl from './assets/logo.png'
+
+export type Pane = 'response' | 'runner' | 'task'
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max))
@@ -185,6 +196,10 @@ function StatusBar({ hello }: { hello: AppHello | null }) {
       >
         {hello ? `v${hello.mainVersion}` : '连接中'}
       </span>
+
+      <span className="status-end">
+        <NotificationBell />
+      </span>
     </footer>
   )
 }
@@ -205,7 +220,7 @@ export default function App() {
     activeProjectId,
   } = useApp()
   const [hello, setHello] = useState<AppHello | null>(null)
-  const [pane, setPane] = useState<'response' | 'runner'>('response')
+  const [pane, setPane] = useState<Pane>('response')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [orientation, setOrientation] = useState<'right' | 'bottom'>(() =>
     loadPref<'right' | 'bottom'>('orientation', 'right'),
@@ -221,10 +236,15 @@ export default function App() {
   useEffect(() => {
     void boot()
     void useOpen.getState().load()
+    void useTasks.getState().load()
+    void useNotify.getState().loadSettings()
     void invoke('app:hello', {})
       .then(setHello)
       .catch(() => setHello(null))
   }, [boot])
+
+  useEvent('event:notify', (view) => useNotify.getState().receive(view))
+  useEvent('event:task-state', (payload) => useTasks.getState().applyState(payload))
 
   useEffect(() => {
     if (!toast) return
@@ -373,6 +393,15 @@ export default function App() {
                 >
                   Runner
                 </button>
+                <button
+                  role="tab"
+                  aria-selected={pane === 'task'}
+                  title="定时任务"
+                  data-testid="pane-task-tab"
+                  onClick={() => setPane('task')}
+                >
+                  任务
+                </button>
               </div>
               <div className="pane-actions">
                 <button
@@ -397,7 +426,18 @@ export default function App() {
                 </button>
               </div>
             </div>
-            {pane === 'response' ? <ResponsePane /> : <RunnerPane />}
+            {pane === 'response' ? (
+              <ResponsePane />
+            ) : pane === 'runner' ? (
+              <RunnerPane />
+            ) : (
+              <TaskPane
+                onOpenRun={(runId) => {
+                  setPane('runner')
+                  void useRunner.getState().selectRun(runId)
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -421,6 +461,10 @@ export default function App() {
 
       <OpenSettings />
       <OpenApprovalBar />
+
+      <NotificationCenter onJump={setPane} />
+      <NotifySettings />
+      <NotifyToast />
 
       {toast && (
         <div className={`toast${toast.kind === 'error' ? ' error' : ''}`} role="status">

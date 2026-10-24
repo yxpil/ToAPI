@@ -22,10 +22,11 @@
 |---|---|---|---|
 | B1 资产与脚本 | **v0.2.0** | Collection v2.1 / Environment 导入导出、集合级 auth/variables/scripts 继承、`pm.*` 沙箱、动态变量、常用沙箱库 | 真实 Collection 往返无损；Postman 官方脚本示例全绿 |
 | B2 数据驱动与 CLI | **v0.2.0**（与 B1 同版） | CSV/JSON 数据文件、多迭代、`pm.iterationData`、`pm.execution.setNextRequest`、`toapi run` 无头 CLI、JUnit/JSON/HTML 报告 | CLI 退出码可被 CI 判定；数据行注入与迭代数正确 |
-| B3 协议扩展 | v0.4.0 | GraphQL、WebSocket、SSE、gRPC、MQTT | 每种协议有真实往返用例与历史记录 |
-| B4 自动化与长尾 | v0.5.0 | OpenAPI 2.0/3.0/3.1 导入导出、本地 Mock、保存示例、代码生成扩展、`pm.visualizer`、认证长尾与传输能力、Apifox 互操作（§7.1） | 认证矩阵全绿；OpenAPI 导入可跑；Apifox 导出样本往返无损 |
+| B3 协议扩展 | v0.5.0 | GraphQL、WebSocket、SSE、gRPC、MQTT | 每种协议有真实往返用例与历史记录 |
+| B4 自动化与长尾 | v0.6.0 | OpenAPI 2.0/3.0/3.1 导入导出、本地 Mock、保存示例、代码生成扩展、`pm.visualizer`、认证长尾与传输能力、Apifox 互操作（§7.1） | 认证矩阵全绿；OpenAPI 导入可跑；Apifox 导出样本往返无损 |
 
-> 2026-10-24 版本映射调整：B1+B2 合并进 v0.2.0 发布；v0.3.0 让位给「协作与开放」（.tapi 互传 + 全局搜索 + AI 可调用面），B3/B4 顺延为 v0.4.0/v0.5.0；批次范围与验收标准不变。
+> 2026-10-24 版本映射调整：B1+B2 合并进 v0.2.0 发布；v0.3.0 让位给「协作与开放」（.tapi 互传 + 全局搜索 + AI 可调用面）；v0.4.0 让位给「后台运行」（托盘 + 定时回归 + 通知中心，12 / 15 号文档），B3/B4 顺延为 v0.5.0/v0.6.0；批次范围与验收标准不变。
+> Postman Monitor 的本地等价物即 12 号文档的定时回归 + 15 号文档的通知/报告，属于「后台运行」版而非 B 批次；云 Monitor 仍不做（§9 非目标）。
 
 > 批次之间不破坏数据：B1 的 `source_json` 字段为后续批次保留原文，后续解析器可逐步消化，无需重新导入。
 

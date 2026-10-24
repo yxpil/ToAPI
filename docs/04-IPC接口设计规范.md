@@ -80,7 +80,7 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `runner:get` | `{id}` | `RunnerRunView`（含逐项与断言） |
 | `runner:list` | `{limit?}` | `Omit<RunnerRunView,'items'>[]` |
 | `data:parse` | `{content}` | `{rows: Record<string,string>[], format:'csv'\|'json'}`（Runner 数据行解析；渲染进程无 fs 权限，粘贴文本只在主进程解析，23 号文档 §5.1） |
-| `runner:report` | `{runId, format:'html'\|'json'}` | `{filePath}`（**待实现**，M5） |
+| `runner:report` | `{runId, format:'json'\|'junit'\|'html', filePath?}` | `{filePath}`（复用 CLI 渲染器 `electron/cli/reporters.ts`；不给 `filePath` 时落 `userData/reports/<集合名>-<时间戳>.<后缀>`，自定义路径后缀与格式不符时自动补正确后缀，07 号文档 §2.4） |
 
 > 无头 CLI `toapi run` 不走 IPC：它直接 `createKernel()` 后调用 `RunnerFlow`（23 号文档 §5.3）。同一套进程内入口也用于 Local HTTP API / MCP（11 号文档），三者共用 `kernel`，不复制业务逻辑。
 
@@ -93,9 +93,9 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `case:run` / `codegen:from-api` / `codegen:to-api` / `testgen:from-history` / `python:detect` | 见 09 号文档 §7 | |
 | `md:interpret` / `md:open` / `md:run` / `md:sync` | 见 10 号文档 §2.3 / §4 / §5 | |
 | `open:get-config` / `open:set-config` / `open:rotate-token` / `open:list-clients` / `open:revoke-client` / `open:call-log` / `open:approval-result`（+ 事件 `event:open-approval`） | 见 11 号文档 §6 | 设置面板与授权条的唯一后端；`rotate-token` 的新密码只在该次返回值里出现 |
-| `task:*` / `macro:*`（CRUD、preview、run-now、system-register） | 见 12 号文档 §4 | |
+| `task:list` / `task:create` / `task:update` / `task:delete` / `task:toggle` / `task:preview` / `task:run-now`（+ 事件 `event:task-state`） | 见 12 号文档 §1/§4 | 定时任务 CRUD 与未来 5 次触发预览；`macro:*` 未实现 |
 | `load:run` / `load:cancel` / `load:get` / `load:compare` / `event:load-tick` | 见 13 号文档 §3 | |
-| `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-rules` / `notify:set-rules` / `notify:test-webhook` / `event:notify` | 见 15 号文档 §6 | |
+| `notify:list` / `notify:mark-read` / `notify:mark-all-read` / `notify:get-settings` / `notify:set-settings` / `notify:test-webhook`（+ 事件 `event:notify`） | 见 15 号文档 §6 | 订阅矩阵与托盘开关合并在一对通道里读写：`get-settings` 返回 `{rules, closeToTray, stateChangeOnly, webhookUrl, webhookTemplate, unread}`，`set-settings` 只覆盖给出的字段 |
 | `ai:get-config` / `ai:set-config` / `ai:test-connection` / `ai:gen-api` / `ai:gen-script` / `ai:gen-schema` / `ai:explain-failure` / `ai:explain-load` / `ai:interpret-md` / `ai:adopt` / `ai:call-log` | 见 16 号文档 §5 | |
 
 ### 3.6 应用、窗口与握手
@@ -118,6 +118,8 @@ type IpcResult<T> = IpcOk<T> | IpcErr
 | `event:runner-progress` | `{runId, item: RunnerItem}` | 每完成一项 |
 | `event:script-log` | `{source:'pre'\|'post'\|'test', level, text, ts}` | 脚本 console 输出 |
 | `event:window-state` | `{maximized}` | 最大化 / 还原（含系统路径触发） |
+| `event:notify` | `NotificationView`（含 `count` 合并计数） | 每条通知入库后推送：角标与通知中心实时刷新，渲染进程按 `rules[type].toast` 决定是否弹 Toast（15 号文档 §3） |
+| `event:task-state` | `{taskId, running, nextRunAt, lastRunAt, lastRunId, lastFailed}` | 任务启用/停用、触发开始与结束时（12 号文档 §1） |
 
 ## 4. 核心类型：SendResult
 

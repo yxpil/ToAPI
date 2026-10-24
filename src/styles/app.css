@@ -1638,6 +1638,245 @@ kbd {
   }
 }
 
+/* ── 通知中心与定时任务（15 号文档 §5 / 12 号文档 §1）── */
+.status-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+}
+.bell-btn {
+  position: relative;
+}
+.bell-badge {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.notify-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 28px rgba(22, 22, 24, 0.08);
+  z-index: 55;
+}
+.notify-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.notify-head .dialog-title {
+  margin: 0;
+  flex: 1;
+}
+.notify-tabs {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.notify-tabs button {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: 12px;
+}
+.notify-tabs button[aria-selected='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.notify-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-3);
+}
+.notify-group {
+  margin-bottom: var(--sp-3);
+}
+.notify-item {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.notify-item:hover {
+  background: var(--bg-hover);
+}
+.notify-item.read {
+  color: var(--ink-tertiary);
+}
+.notify-item.read .notify-title {
+  font-weight: 400;
+}
+.notify-icon {
+  flex: none;
+  padding-top: 2px;
+  color: var(--ink-secondary);
+}
+.notify-item.warn .notify-icon {
+  color: var(--warn);
+}
+.notify-item.error .notify-icon {
+  color: var(--err);
+}
+.notify-main {
+  flex: 1;
+  min-width: 0;
+}
+.notify-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.notify-merge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-active);
+  color: var(--ink-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.notify-body {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  word-break: break-word;
+}
+.notify-mark {
+  flex: none;
+  align-self: flex-start;
+}
+.notify-footbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.notify-footbar .meta {
+  margin-right: auto;
+}
+.notify-toast {
+  pointer-events: auto;
+  bottom: 78px;
+  max-width: 520px;
+}
+.notify-toast-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notify-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--sp-3);
+  font-size: 12px;
+}
+.notify-matrix th,
+.notify-matrix td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: 400;
+}
+.notify-matrix th {
+  color: var(--ink-secondary);
+}
+.notify-cell {
+  text-align: center;
+}
+.task-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.task-toolbar .meta {
+  margin-left: auto;
+}
+.task-list {
+  flex: 1;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  list-style: none;
+  overflow-y: auto;
+}
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-radius: var(--radius-control);
+}
+.task-row:hover {
+  background: var(--bg-hover);
+}
+.task-row.off .task-main {
+  opacity: 0.55;
+}
+.task-switch {
+  flex: none;
+  padding-top: 2px;
+}
+.task-main {
+  flex: 1;
+  min-width: 0;
+}
+.task-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.task-running {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-active);
+  color: var(--ink-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.task-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-3);
+}
+.task-preview .pill {
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

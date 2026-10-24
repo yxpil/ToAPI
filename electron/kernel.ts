@@ -3,6 +3,7 @@ import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase, userVersion, type Db } from './db/database'
 import { createRepos, type Repos } from './db/repo'
+import type { RunnerRun } from './db/repo/runner.repo'
 import { FileStore } from './infra/filestore'
 import { CancelRegistry } from './infra/cancel-registry'
 import { HttpEngine } from './http/engine'
@@ -14,10 +15,21 @@ import { TapiService, type TapiDialogs } from './tapi/service'
 import { OpenService } from './open/service'
 import { LocalHttpApi } from './open/http-api'
 import { mcpOverHttp } from './open/mcp'
+import { NotifyService, type DesktopHooks } from './notify/service'
+import { ScheduleService } from './schedule/service'
 import { channelsHashOf, type HandlerMap } from './ipc/router'
 import { buildHandlers, type WindowControls } from './ipc/handlers'
 import { IpcErrorRaised } from '@shared/types'
-import type { AppHello, ChannelName, EventName, EventPayload, ReqOf, ResOf } from '@shared/channels'
+import type {
+  AppHello,
+  ChannelName,
+  EventName,
+  EventPayload,
+  NotificationView,
+  NotifyLevel,
+  ReqOf,
+  ResOf,
+} from '@shared/channels'
 
 export interface Kernel {
   db: Db
@@ -32,6 +44,8 @@ export interface Kernel {
   tapi: TapiService
   open: OpenService
   http: LocalHttpApi
+  notify: NotifyService
+  schedule: ScheduleService
   /** 按配置起停 Local HTTP API；返回当前监听状态（11 号文档 §1.1） */
   syncOpenEndpoint: () => Promise<{ running: boolean; port: number }>
   hello: AppHello
@@ -59,6 +73,12 @@ export interface KernelOptions {
    * GUI 与集成测试保持 false（默认），走用户确认。
    */
   headless?: boolean
+  /** OS 原生通知与「窗口是否在前台」；无桌面环境（CLI、集成测试）不注入 */
+  desktop?: DesktopHooks
+  /** 通知入库回调：主进程用它刷新托盘红点与菜单 */
+  onNotification?: (view: NotificationView) => void
+  /** Webhook 投递用的 fetch，测试注入桩实现 */
+  fetchImpl?: typeof fetch
 }
 
 /** 主进程能力内核：与 BrowserWindow / electron API 解耦，集成测试可直接驱动（17 号文档 §1） */
@@ -75,7 +95,21 @@ export function createKernel(options: KernelOptions): Kernel {
     ? new ScriptVM({ workerPath: options.scriptWorkerPath })
     : null
   const flow = new RequestFlow({ engine, files, cancel, repos, emit, script: script ?? undefined })
-  const runner = new RunnerFlow({ repos, flow, cancel, emit })
+  const notify = new NotifyService({
+    repos,
+    emit,
+    desktop: options.desktop,
+    onPosted: options.onNotification,
+    fetchImpl: options.fetchImpl,
+  })
+  const runner = new RunnerFlow({
+    repos,
+    flow,
+    cancel,
+    emit,
+    onRunFinished: (run, ctx) => reportRunFinish(notify, run, ctx),
+  })
+  const schedule = new ScheduleService({ repos, runner, files, notify, emit })
   const postman = new PostmanService({ db, repos, dialogs: options.dialogs })
   const tapi = new TapiService({
     db,
@@ -155,6 +189,9 @@ export function createKernel(options: KernelOptions): Kernel {
     postman,
     tapi,
     open,
+    notify,
+    schedule,
+    files,
     syncOpenEndpoint,
     window: options.window,
   })
@@ -175,16 +212,45 @@ export function createKernel(options: KernelOptions): Kernel {
     tapi,
     open,
     http,
+    notify,
+    schedule,
     syncOpenEndpoint,
     hello,
     handlers,
     invoke,
     dispose: () => {
+      schedule.stop()
       void http.stop()
       engine.close()
       db.close()
     },
   }
+}
+
+/**
+ * Runner 结束 → 通知中心（15 号文档 §1）。
+ * 用户主动取消不打扰；定时任务触发的由任务侧发 task.finished，避免一次运行两条通知。
+ */
+function reportRunFinish(
+  notify: NotifyService,
+  run: RunnerRun,
+  ctx: { cancelId: string; abortedByUser: boolean; abortedByFail: boolean },
+): void {
+  if (ctx.abortedByUser || ctx.cancelId.startsWith('task:')) return
+  const aborted = ctx.abortedByFail
+  const level: NotifyLevel = aborted ? 'error' : run.failed > 0 ? 'warn' : 'info'
+  const broken = run.items.filter((i) => i.status === 'failed' || i.status === 'error').slice(0, 3)
+  notify.publish({
+    type: aborted ? 'runner.failed' : 'runner.finished',
+    level,
+    title: `${run.scopeName}：${run.passed}/${run.total} 通过`,
+    body: broken.length
+      ? `失败：${broken.map((i) => i.apiName).join('、')}${aborted ? ' · 遇错即停已中止' : ''}`
+      : `迭代 ${run.iterationCount} 轮 · 全部通过`,
+    sourceType: 'runner_run',
+    sourceId: run.id,
+    force: aborted,
+  })
 }
 
 export const userDataPaths = (userDataDir: string): { dbPath: string; filesDir: string } => ({

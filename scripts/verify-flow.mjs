@@ -1026,6 +1026,143 @@ try {
     throw new Error(`Ctrl+Shift+R 集合结果不符：${report.shortcutRun}`)
   }
 
+  // ── 通知中心（15 号文档 §5）：Runner 结果必须能在界面看到、跳转、清零 ──
+  report.notifyBadgeBefore = await app.js(
+    `document.querySelector('[data-testid="notify-unread"]')?.innerText ?? null`,
+  )
+  if (report.notifyBadgeBefore === null) throw new Error('跑过集合后底栏铃铛没有未读角标')
+  await app.js(`window.__h.click('通知中心')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="notify-drawer"]')`, '通知抽屉打开')
+  report.notifyItems = await app.js(
+    `[...document.querySelectorAll('[data-testid="notify-item"]')].map((e) => e.textContent)`,
+  )
+  report.notifyDrawerWidth = await app.js(
+    `Math.round(document.querySelector('[data-testid="notify-drawer"]').getBoundingClientRect().width)`,
+  )
+  if (report.notifyDrawerWidth !== 320)
+    throw new Error(`通知抽屉不是 320px：${report.notifyDrawerWidth}`)
+  if (!report.notifyItems.some((t) => t.includes('冒烟') || t.includes('/2 通过'))) {
+    throw new Error(`通知中心没有 Runner 汇报：${JSON.stringify(report.notifyItems)}`)
+  }
+  report.notifyLevelColors = await app.js(`(() => {
+    const item = document.querySelector('[data-testid="notify-item"]')
+    const icon = getComputedStyle(item.querySelector('.notify-icon')).color
+    const warn = document.querySelector('.notify-item.warn .notify-icon')
+    return { icon, warn: warn ? getComputedStyle(warn).color : null }
+  })()`)
+  // 点条目跳来源：应把右侧面板切到 Runner 并选中那次运行（抽屉保持开着）
+  await app.js(`document.querySelector('[data-testid="notify-item"]').click()`)
+  await app.waitFor(`!!document.querySelector('[data-testid="runner"]')`, '通知点击跳到 Runner')
+  await app.waitFor(
+    `document.querySelector('[data-testid="notify-drawer"]') !== null`,
+    '跳转后抽屉不关',
+  )
+  await app.js(`document.querySelector('[data-testid="notify-read-all"]').click()`)
+  await app.waitFor(
+    `!document.querySelector('[data-testid="notify-unread"]')`,
+    '全部已读后角标消失',
+  )
+  await app.js(`document.querySelector('[aria-label="关闭通知中心"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="notify-drawer"]')`, '通知抽屉关闭')
+
+  // ── 定时任务（12 号文档 §1）：cron 预览 → 锁环境 → 立即运行 → 汇报与报告进通知 ──
+  await app.js(`window.__h.click('定时任务')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="task-pane"]')`, '任务面板打开')
+  await app.js(`window.__h.click('新建定时任务')`)
+  await app.waitFor(`!!document.querySelector('[data-testid="task-editor"]')`, '任务编辑器打开')
+  await app.js(`window.__h.set(document.querySelector('[aria-label="任务名"]'), '每小时冒烟')`)
+  await app.js(`(() => {
+    const sel = document.querySelector('[aria-label="运行目标"]')
+    const opt = [...sel.options].find((o) => o.innerText.includes('默认集合'))
+    if (!opt) throw new Error('目标下拉里没有默认集合')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value)
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return opt.innerText
+  })()`)
+  report.taskEnvEmpty = await app.js(
+    `document.querySelector('[aria-label="锁定环境"]')?.value ?? null`,
+  )
+  // 就地建环境：定时任务必须锁环境，界面不能逼用户先去导 Postman 环境
+  await app.js(`window.__h.click('在目标项目下新建环境并选中')`)
+  await app.waitFor(
+    `document.querySelector('[aria-label="锁定环境"]')?.value !== ''`,
+    '新建环境后自动选中',
+  )
+  report.taskEnvAfter = await app.js(
+    `document.querySelector('[aria-label="锁定环境"]')?.value ?? null`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="cron 表达式"]'), '0 * * * *')`)
+  await app.waitFor(
+    `document.querySelectorAll('[data-testid="task-preview"] .pill').length === 5`,
+    '未来 5 次触发预览',
+  )
+  report.taskPreview = await app.js(
+    `[...document.querySelectorAll('[data-testid="task-preview"] .pill')].map((e) => e.innerText)`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="cron 表达式"]'), '* *')`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="task-preview"] .tapi-error')`,
+    '非法表达式即时报错',
+  )
+  report.taskPreviewError = await app.js(
+    `document.querySelector('[data-testid="task-preview"] .tapi-error')?.innerText ?? null`,
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="cron 表达式"]'), '0 * * * *')`)
+  await app.waitFor(
+    `document.querySelectorAll('[data-testid="task-preview"] .pill').length === 5`,
+    '改回合法表达式后预览恢复',
+  )
+  // 每次落 JSON 报告，路径要出现在通知正文里（用户要的"报告返回系统通知"）
+  await app.js(`(() => {
+    const sel = document.querySelector('[aria-label="报告格式"]')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'json')
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return sel.value
+  })()`)
+  await app.js(`document.querySelector('[data-testid="task-save"]').click()`)
+  await app.waitFor(
+    `document.querySelectorAll('[data-testid="task-row"]').length === 1`,
+    '任务进入列表',
+  )
+  report.taskRow = await app.js(
+    `document.querySelector('[data-testid="task-row"]')?.textContent ?? null`,
+  )
+  if (!report.taskRow.includes('每小时冒烟') || !report.taskRow.includes('下次')) {
+    throw new Error(`任务行缺少名称与下次触发：${report.taskRow}`)
+  }
+  await app.js(`window.__h.click('立即运行一次')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="notify-toast"]')?.textContent.includes('每小时冒烟') ?? false`,
+    '任务结果 Toast 弹出',
+    15000,
+  )
+  report.notifyToast = await app.js(
+    `document.querySelector('[data-testid="notify-toast"]')?.textContent ?? null`,
+  )
+  await app.waitFor(
+    `document.querySelector('[data-testid="task-row"]')?.innerText.includes('上次') ?? false`,
+    '任务行记录上次运行',
+  )
+  report.taskRowAfterRun = await app.js(
+    `document.querySelector('[data-testid="task-row"]')?.textContent ?? null`,
+  )
+  await app.js(`window.__h.click('通知中心')`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="notify-drawer"]') !== null`,
+    '通知抽屉（任务结果）打开',
+  )
+  report.taskNotifyItem = await app.js(
+    `[...document.querySelectorAll('[data-testid="notify-item"]')].map((e) => e.textContent).find((t) => t.includes('每小时冒烟')) ?? null`,
+  )
+  if (!report.taskNotifyItem) throw new Error('定时任务结果没进通知中心')
+  if (!report.taskNotifyItem.includes('2/2 通过') || !report.taskNotifyItem.includes('.json')) {
+    throw new Error(`任务通知缺少通过率或报告路径：${report.taskNotifyItem}`)
+  }
+  const notifyShot = await app.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(resolve(root, '.tmp/toapi-notify.png'), Buffer.from(notifyShot.data, 'base64'))
+  await app.js(`document.querySelector('[aria-label="关闭通知中心"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="notify-drawer"]')`, '通知抽屉再次关闭')
+
   await app.js(`window.__h.click('响应与历史')`)
   await app.js(`window.__h.click('发送 (Ctrl+Enter)')`)
   await app.waitFor(`!!document.querySelector('.json-key')`, '截图前响应', 25000)
@@ -1466,11 +1603,59 @@ try {
 
   report.runtimeErrorsRound2 = app.errors
 
-  // 关闭也走自绘标题栏：应等价原生关闭并退出进程（Windows 最后一窗）
+  // ── 关窗收进托盘（15 号文档 §4）：默认开，此时进程必须存活且页面转入后台 ──
+  await app.js(`window.__h.click('关闭 (Alt+F4)')`)
+  await wait(700)
+  report.closeToTrayAlive = child?.exitCode === null
+  report.closeToTrayHidden = await app.js(`document.visibilityState`)
+  if (!report.closeToTrayAlive)
+    throw new Error('勾选「关窗最小化到托盘」后关闭应驻留托盘而不是退出')
+  if (report.closeToTrayHidden !== 'hidden') {
+    throw new Error(`关窗后页面未转入后台：visibilityState=${report.closeToTrayHidden}`)
+  }
+
+  // 关掉该设置后再关窗，才走真退出（标题栏关闭语义在 06 号文档 §4）
+  await app.js(`window.__h.key('k', { ctrlKey: true })`)
+  await app.waitFor(
+    `!!document.querySelector('[data-testid="command-palette"]')`,
+    '命令面板（托盘设置）打开',
+  )
+  await app.js(`window.__h.set(document.querySelector('[aria-label="命令"]'), '通知设置')`)
+  await app.waitFor(
+    `[...document.querySelectorAll('[data-testid="palette-item"]')].some((e) => e.innerText.includes('通知设置'))`,
+    '命令面板能找到通知设置',
+  )
+  await app.js(
+    `document.querySelector('[aria-label="命令"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`,
+  )
+  await app.waitFor(`!!document.querySelector('[data-testid="notify-settings"]')`, '通知设置打开')
+  report.traySettingBefore = await app.js(
+    `document.querySelector('[data-testid="notify-tray"]')?.checked ?? null`,
+  )
+  if (report.traySettingBefore !== true) throw new Error('托盘设置默认应为开')
+  await app.js(`document.querySelector('[data-testid="notify-tray"]').click()`)
+  await app.waitFor(
+    `document.querySelector('[data-testid="notify-tray"]')?.checked === false`,
+    '托盘设置已关闭',
+  )
+  report.notifyMatrix = await app.js(`(() => {
+    const rows = [...document.querySelectorAll('.notify-matrix tbody tr')]
+    return {
+      rowCount: rows.length,
+      cells: rows[0].querySelectorAll('input[type=checkbox]').length,
+      width: Math.round(document.querySelector('[data-testid="notify-settings"]').getBoundingClientRect().width)
+    }
+  })()`)
+  if (report.notifyMatrix.rowCount !== 6 || report.notifyMatrix.cells !== 4) {
+    throw new Error(`订阅矩阵不是 6 事件 × 4 通道：${JSON.stringify(report.notifyMatrix)}`)
+  }
+  await app.js(`document.querySelector('[data-testid="notify-close"]').click()`)
+  await app.waitFor(`!document.querySelector('[data-testid="notify-settings"]')`, '通知设置关闭')
+
   await app.js(`window.__h.click('关闭 (Alt+F4)')`)
   for (let i = 0; i < 40 && child && child.exitCode === null; i++) await wait(150)
   report.closedViaTitlebar = child?.exitCode !== null
-  if (!report.closedViaTitlebar) throw new Error('标题栏关闭未退出应用')
+  if (!report.closedViaTitlebar) throw new Error('关闭托盘驻留后，标题栏关闭仍未退出应用')
   app.ws.close()
 } finally {
   await closeApp()
@@ -1484,5 +1669,6 @@ report.screenshots = [
   '.tmp/toapi-titlebar.png',
   '.tmp/toapi-postman.png',
   '.tmp/toapi-postman-dialog.png',
+  '.tmp/toapi-notify.png',
 ]
 console.log(JSON.stringify(report, null, 2))

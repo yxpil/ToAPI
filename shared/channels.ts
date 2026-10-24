@@ -185,6 +185,183 @@ export interface RunnerStartInput {
   timeoutMs?: number
 }
 
+// ── 定时任务（12 号文档 §1）──
+
+/** 触发方式：cron 表达式 / 固定间隔 / 单次时刻 */
+export type ScheduleSpec =
+  | { kind: 'cron'; expr: string }
+  | { kind: 'interval'; everyMs: number }
+  | { kind: 'once'; at: number }
+
+/** case / mddoc / macro 目标尚未落地，12 号文档 §6 记为未实现 */
+export type ScheduleTargetType = 'collection' | 'project' | 'api'
+export type OverlapPolicy = 'skip' | 'queue' | 'parallel'
+export type MisfirePolicy = 'run-on-launch' | 'skip'
+export type ReportFormat = 'json' | 'junit' | 'html'
+
+export interface TaskNotifyOptions {
+  onSuccess: boolean
+  onFail: boolean
+  /** 每次触发落一份报告文件，路径写进通知正文（15 号文档 §1） */
+  report: ReportFormat | 'none'
+}
+
+export interface ScheduleTaskView {
+  id: string
+  name: string
+  enabled: boolean
+  targetType: ScheduleTargetType
+  targetId: string
+  targetName: string
+  spec: ScheduleSpec
+  envId: string | null
+  envName: string
+  overlap: OverlapPolicy
+  misfire: MisfirePolicy
+  notify: TaskNotifyOptions
+  lastRunAt: number | null
+  lastRunId: string | null
+  /** 上次触发的失败项数，null = 还没跑过 */
+  lastFailed: number | null
+  nextRunAt: number | null
+  running: boolean
+}
+
+export interface NewScheduleTask {
+  name: string
+  targetType: ScheduleTargetType
+  targetId: string
+  spec: ScheduleSpec
+  envId?: string | null
+  overlap?: OverlapPolicy
+  misfire?: MisfirePolicy
+  notify?: TaskNotifyOptions
+  enabled?: boolean
+}
+
+export interface UpdateScheduleTask {
+  id: string
+  name?: string
+  targetType?: ScheduleTargetType
+  targetId?: string
+  spec?: ScheduleSpec
+  envId?: string | null
+  overlap?: OverlapPolicy
+  misfire?: MisfirePolicy
+  notify?: TaskNotifyOptions
+  enabled?: boolean
+}
+
+export interface TaskPreviewInput {
+  spec: ScheduleSpec
+  /** 起算时刻，缺省为当前时间 */
+  from?: number
+}
+
+export interface TaskPreviewResult {
+  /** 未来 5 次触发时间（毫秒），非法表达式时为空 */
+  times: number[]
+  error: string | null
+}
+
+// ── 消息通知（15 号文档 §2/§3）──
+
+export type NotifyLevel = 'info' | 'warn' | 'error'
+
+/** 当前版本会真实触发的事件类型；宏与压测事件等特性落地后再补 */
+export const NOTIFY_EVENT_TYPES = [
+  'runner.finished',
+  'runner.failed',
+  'task.finished',
+  'task.misfire',
+  'open.denied',
+  'db.failed',
+] as const
+
+export type NotifyEventType = (typeof NOTIFY_EVENT_TYPES)[number]
+
+export interface NotificationView {
+  id: string
+  type: NotifyEventType
+  level: NotifyLevel
+  title: string
+  body: string
+  sourceType: string | null
+  sourceId: string | null
+  read: boolean
+  /** 60s 窗口内合并的条数（15 号文档 §3.2） */
+  count: number
+  createdAt: number
+}
+
+export interface NotifyListInput {
+  cursor?: string | null
+  unreadOnly?: boolean
+  type?: NotifyEventType | null
+  limit?: number
+}
+
+export interface NotifyPage {
+  items: NotificationView[]
+  nextCursor: string | null
+  unread: number
+}
+
+export interface NotifyChannelFlags {
+  toast: boolean
+  os: boolean
+  sound: boolean
+  webhook: boolean
+}
+
+export type NotifyRuleMap = Record<NotifyEventType, NotifyChannelFlags>
+
+export type WebhookTemplate = 'raw' | 'wecom' | 'dingtalk' | 'feishu'
+
+export interface NotifySettingsView {
+  rules: NotifyRuleMap
+  /** 关闭窗口最小化到托盘（15 号文档 §4） */
+  closeToTray: boolean
+  /** 定时任务只在结果翻转时通知（15 号文档 §3.2） */
+  stateChangeOnly: boolean
+  webhookUrl: string
+  webhookTemplate: WebhookTemplate
+  unread: number
+}
+
+export interface SetNotifySettingsInput {
+  /** 只覆盖给出的通道位，其余保持原值（订阅矩阵逐格勾选） */
+  rules?: Partial<Record<NotifyEventType, Partial<NotifyChannelFlags>>>
+  closeToTray?: boolean
+  stateChangeOnly?: boolean
+  webhookUrl?: string
+  webhookTemplate?: WebhookTemplate
+}
+
+export interface TestWebhookInput {
+  url: string
+  template: WebhookTemplate
+}
+
+export interface TestWebhookResult {
+  ok: boolean
+  status: number
+  error: string | null
+}
+
+// ── 运行报告导出（07/23 号文档）──
+
+export interface RunnerReportInput {
+  runId: string
+  format: ReportFormat
+  /** 缺省写到 reports 目录 */
+  filePath?: string
+}
+
+export interface RunnerReportResult {
+  filePath: string
+}
+
 /** 无边框窗口的最大化状态（06 号文档 §4） */
 export interface WindowState {
   maximized: boolean
@@ -402,6 +579,7 @@ export interface ChannelMap {
   'runner:cancel': { req: { runId: string }; res: void }
   'runner:get': { req: IdInput; res: RunnerRunView }
   'runner:list': { req: { limit?: number }; res: Omit<RunnerRunView, 'items'>[] }
+  'runner:report': { req: RunnerReportInput; res: RunnerReportResult }
   'data:parse': { req: DataParseInput; res: DataParseResult }
   'postman:inspect': { req: PostmanSource; res: PostmanInspect }
   'postman:import': { req: PostmanImportInput; res: PostmanImportReport }
@@ -427,6 +605,19 @@ export interface ChannelMap {
   'open:revoke-client': { req: IdInput; res: void }
   'open:call-log': { req: { limit?: number }; res: OpenCallLogView[] }
   'open:approval-result': { req: OpenApprovalInput; res: void }
+  'task:list': { req: Record<string, never>; res: ScheduleTaskView[] }
+  'task:create': { req: NewScheduleTask; res: ScheduleTaskView }
+  'task:update': { req: UpdateScheduleTask; res: ScheduleTaskView }
+  'task:delete': { req: IdInput; res: void }
+  'task:toggle': { req: { id: string; enabled: boolean }; res: ScheduleTaskView }
+  'task:preview': { req: TaskPreviewInput; res: TaskPreviewResult }
+  'task:run-now': { req: IdInput; res: { runId: string } }
+  'notify:list': { req: NotifyListInput; res: NotifyPage }
+  'notify:mark-read': { req: { ids: string[] }; res: { unread: number } }
+  'notify:mark-all-read': { req: Record<string, never>; res: { unread: number } }
+  'notify:get-settings': { req: Record<string, never>; res: NotifySettingsView }
+  'notify:set-settings': { req: SetNotifySettingsInput; res: NotifySettingsView }
+  'notify:test-webhook': { req: TestWebhookInput; res: TestWebhookResult }
   'window:get-state': { req: Record<string, never>; res: WindowState }
   'window:minimize': { req: Record<string, never>; res: void }
   'window:toggle-maximize': { req: Record<string, never>; res: WindowState }
@@ -471,6 +662,7 @@ export const CHANNELS = [
   'runner:cancel',
   'runner:get',
   'runner:list',
+  'runner:report',
   'data:parse',
   'postman:inspect',
   'postman:import',
@@ -487,6 +679,19 @@ export const CHANNELS = [
   'open:revoke-client',
   'open:call-log',
   'open:approval-result',
+  'task:list',
+  'task:create',
+  'task:update',
+  'task:delete',
+  'task:toggle',
+  'task:preview',
+  'task:run-now',
+  'notify:list',
+  'notify:mark-read',
+  'notify:mark-all-read',
+  'notify:get-settings',
+  'notify:set-settings',
+  'notify:test-webhook',
   'window:get-state',
   'window:minimize',
   'window:toggle-maximize',
@@ -516,8 +721,20 @@ export interface EventMap {
     /** 授权原因说明：新客户端接入或越界 host 确认 */
     detail: string
     /** 授权通过后自动随附的 Skill 说明书摘要，让用户知道会交出什么内容 */
+    /** 授权通过后自动随附的 Skill 说明书摘要，让用户知道会交出什么内容 */
     skillPreview: string
     createdAt: number
+  }
+  /** 新通知 / 合并计数更新：Toast、角标与通知中心实时刷新（15 号文档 §6） */
+  'event:notify': NotificationView
+  /** 定时任务的运行态与下次触发时间变化（12 号文档 §1） */
+  'event:task-state': {
+    taskId: string
+    running: boolean
+    nextRunAt: number | null
+    lastRunAt: number | null
+    lastRunId: string | null
+    lastFailed: number | null
   }
 }
 
@@ -526,6 +743,8 @@ export const EVENT_CHANNELS = [
   'event:runner-progress',
   'event:window-state',
   'event:open-approval',
+  'event:notify',
+  'event:task-state',
 ] as const satisfies readonly (keyof EventMap)[]
 
 export type EventName = (typeof EVENT_CHANNELS)[number]

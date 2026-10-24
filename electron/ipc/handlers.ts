@@ -6,9 +6,14 @@ import type { RequestFlow } from '../flow/request'
 import type { RunnerFlow } from '../flow/runner'
 import { parseDataAuto } from '../flow/data-file'
 import type { CancelRegistry } from '../infra/cancel-registry'
+import type { FileStore } from '../infra/filestore'
 import type { PostmanService } from '../postman/service'
 import type { TapiService } from '../tapi/service'
 import type { OpenService } from '../open/service'
+import type { NotifyService } from '../notify/service'
+import { assertWebhookUrl } from '../notify/webhook'
+import type { ScheduleService } from '../schedule/service'
+import { writeReport } from '../report/export'
 import { midpoint } from '../db/repo/rows'
 import type { HandlerMap } from './router'
 
@@ -27,6 +32,9 @@ export interface HandlerDeps {
   postman: PostmanService
   tapi: TapiService
   open: OpenService
+  notify: NotifyService
+  schedule: ScheduleService
+  files: FileStore
   /** 起停 Local HTTP API；改完配置必须调它，端口/开关才会真正生效 */
   syncOpenEndpoint: () => Promise<{ running: boolean; port: number }>
   cancel: CancelRegistry
@@ -202,6 +210,10 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     },
     'runner:get': (req) => must(deps.repos.runner.get(req.id), '运行记录'),
     'runner:list': (req) => deps.repos.runner.list(req.limit ?? 20),
+    'runner:report': (req) => {
+      const run = must(deps.repos.runner.get(req.runId), '运行记录')
+      return { filePath: writeReport(deps.files, run, req.format, req.filePath) }
+    },
     'data:parse': (req) => parseDataAuto(req.content),
 
     'postman:inspect': (req) => deps.postman.inspect(req),
@@ -239,6 +251,38 @@ export function buildHandlers(deps: HandlerDeps): HandlerMap {
     'open:approval-result': (req) => {
       deps.open.approvalResult(req)
     },
+
+    'task:list': () => deps.schedule.list(),
+    'task:create': (req) => deps.schedule.create(req),
+    'task:update': (req) => deps.schedule.update(req),
+    'task:delete': (req) => {
+      deps.schedule.remove(req.id)
+    },
+    'task:toggle': (req) => deps.schedule.toggle(req.id, req.enabled),
+    'task:preview': (req) => deps.schedule.preview(req.spec, req.from),
+    'task:run-now': (req) => deps.schedule.runNow(req.id),
+
+    'notify:list': (req) => deps.notify.list(req),
+    'notify:mark-read': (req) => {
+      deps.notify.markRead(req.ids)
+      return { unread: deps.notify.unread() }
+    },
+    'notify:mark-all-read': () => {
+      deps.notify.markAllRead()
+      return { unread: deps.notify.unread() }
+    },
+    'notify:get-settings': () => deps.notify.settings(),
+    'notify:set-settings': (req) => {
+      if (typeof req.webhookUrl === 'string' && req.webhookUrl.trim() !== '') {
+        try {
+          assertWebhookUrl(req.webhookUrl)
+        } catch (e) {
+          invalid((e as Error).message)
+        }
+      }
+      return deps.notify.setSettings(req)
+    },
+    'notify:test-webhook': (req) => deps.notify.testWebhook(req),
 
     'window:get-state': () => ({ maximized: win.isMaximized() }),
     'window:minimize': () => {

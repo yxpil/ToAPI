@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createKernel, userDataPaths, type Kernel } from './kernel'
 import { registerAll } from './ipc/router'
+import { createDesktop, type Desktop } from './desktop/tray'
 import { createLogger } from './infra/logger'
 
 const log = createLogger('main')
@@ -13,6 +14,9 @@ const FRAMELESS = process.platform === 'win32'
 
 let win: BrowserWindow | null = null
 let kernel: Kernel | null = null
+let desktop: Desktop | null = null
+/** 只有托盘菜单与 app.quit 才是真退出，关窗按设置收进托盘（15 号文档 §4） */
+let quitting = false
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -95,6 +99,12 @@ void app.whenReady().then(() => {
         return result.filePath
       },
     },
+    // 托盘在窗口建好后才创建，这里先挂转发器，避免内核与桌面层互相依赖
+    desktop: {
+      show: (title, body, silent) => desktop?.showNotification(title, body, silent),
+      isFront: () => desktop?.hooks.isFront() ?? false,
+    },
+    onNotification: () => desktop?.refresh(),
   })
   registerAll(ipcMain, { hello: kernel.hello, handlers: kernel.handlers })
   log.info('kernel ready', kernel.hello)
@@ -107,9 +117,23 @@ void app.whenReady().then(() => {
     })
     .catch((e: Error) => log.error(`开放通道启动失败：${e.message}`))
   createWindow()
+  if (kernel) {
+    desktop = createDesktop({
+      getWindow: () => win,
+      kernel,
+      isQuitting: () => quitting,
+      quit: () => {
+        quitting = true
+        app.quit()
+      },
+    })
+    // 定时任务调度随应用启动；无头 CLI 不启动，避免与 GUI 抢同一套 DB
+    kernel.schedule.start()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    else win?.show()
   })
 })
 
@@ -118,6 +142,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
+  desktop?.dispose()
+  desktop = null
   kernel?.dispose()
   kernel = null
 })

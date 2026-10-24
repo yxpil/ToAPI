@@ -69,6 +69,58 @@ const draftUrlSchema = z.string().max(8000)
 
 const iterationDataSchema = z.record(z.string().max(200), z.string().max(20000))
 
+// ── 定时任务与通知（12 / 15 号文档）──
+
+/** 表达式故意放宽到 1 字符：非法写法要能进 handler 拿到中文原因，而不是被 schema 挡成通用 VALIDATION */
+const scheduleSpecSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('cron'), expr: z.string().min(1).max(200) }),
+  z.object({
+    kind: z.literal('interval'),
+    everyMs: z.number().int().min(1000).max(31_536_000_000),
+  }),
+  z.object({ kind: z.literal('once'), at: z.number().int().min(0).max(8_640_000_000_000_000) }),
+])
+
+const targetTypeSchema = z.enum(['collection', 'project', 'api'])
+const overlapSchema = z.enum(['skip', 'queue', 'parallel'])
+const misfireSchema = z.enum(['run-on-launch', 'skip'])
+const reportFormatSchema = z.enum(['json', 'junit', 'html', 'none'])
+
+const taskNotifySchema = z.object({
+  onSuccess: z.boolean(),
+  onFail: z.boolean(),
+  report: reportFormatSchema,
+})
+
+const scheduleSpecSource = { spec: scheduleSpecSchema }
+
+const channelFlagsSchema = z.object({
+  toast: z.boolean(),
+  os: z.boolean(),
+  sound: z.boolean(),
+  webhook: z.boolean(),
+})
+
+const notifyRulesSchema = z.object({
+  'runner.finished': channelFlagsSchema.partial().optional(),
+  'runner.failed': channelFlagsSchema.partial().optional(),
+  'task.finished': channelFlagsSchema.partial().optional(),
+  'task.misfire': channelFlagsSchema.partial().optional(),
+  'open.denied': channelFlagsSchema.partial().optional(),
+  'db.failed': channelFlagsSchema.partial().optional(),
+})
+
+const webhookUrlSchema = z.string().max(2000)
+const webhookTemplateSchema = z.enum(['raw', 'wecom', 'dingtalk', 'feishu'])
+const notifyTypeSchema = z.enum([
+  'runner.finished',
+  'runner.failed',
+  'task.finished',
+  'task.misfire',
+  'open.denied',
+  'db.failed',
+])
+
 const empty = z.object({})
 
 export const draftSchema = z.object({
@@ -197,6 +249,11 @@ export const INPUT_SCHEMAS = {
   'runner:cancel': z.object({ runId: idSchema }),
   'runner:get': z.object({ id: idSchema }),
   'runner:list': z.object({ limit: z.number().int().min(1).max(100).optional() }),
+  'runner:report': z.object({
+    runId: idSchema,
+    format: z.enum(['json', 'junit', 'html']),
+    filePath: z.string().max(4096).optional(),
+  }),
   'data:parse': z.object({ content: z.string().min(1).max(2_000_000) }),
   'postman:inspect': z
     .object({
@@ -275,6 +332,54 @@ export const INPUT_SCHEMAS = {
   'open:revoke-client': z.object({ id: idSchema }),
   'open:call-log': z.object({ limit: z.number().int().min(1).max(1000).optional() }),
   'open:approval-result': z.object({ clientId: idSchema, approve: z.boolean() }),
+  'task:list': empty,
+  'task:create': z.object({
+    name: nameSchema,
+    targetType: targetTypeSchema,
+    targetId: idSchema,
+    ...scheduleSpecSource,
+    envId: idSchema.nullable().optional(),
+    overlap: overlapSchema.optional(),
+    misfire: misfireSchema.optional(),
+    notify: taskNotifySchema.optional(),
+    enabled: z.boolean().optional(),
+  }),
+  'task:update': z.object({
+    id: idSchema,
+    name: nameSchema.optional(),
+    targetType: targetTypeSchema.optional(),
+    targetId: idSchema.optional(),
+    spec: scheduleSpecSchema.optional(),
+    envId: idSchema.nullable().optional(),
+    overlap: overlapSchema.optional(),
+    misfire: misfireSchema.optional(),
+    notify: taskNotifySchema.optional(),
+    enabled: z.boolean().optional(),
+  }),
+  'task:delete': z.object({ id: idSchema }),
+  'task:toggle': z.object({ id: idSchema, enabled: z.boolean() }),
+  'task:preview': z.object({
+    ...scheduleSpecSource,
+    from: z.number().int().min(0).max(8_640_000_000_000_000).optional(),
+  }),
+  'task:run-now': z.object({ id: idSchema }),
+  'notify:list': z.object({
+    cursor: z.string().max(200).nullable().optional(),
+    unreadOnly: z.boolean().optional(),
+    type: notifyTypeSchema.nullable().optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+  }),
+  'notify:mark-read': z.object({ ids: z.array(idSchema).max(500) }),
+  'notify:mark-all-read': empty,
+  'notify:get-settings': empty,
+  'notify:set-settings': z.object({
+    rules: notifyRulesSchema.optional(),
+    closeToTray: z.boolean().optional(),
+    stateChangeOnly: z.boolean().optional(),
+    webhookUrl: webhookUrlSchema.optional(),
+    webhookTemplate: webhookTemplateSchema.optional(),
+  }),
+  'notify:test-webhook': z.object({ url: webhookUrlSchema, template: webhookTemplateSchema }),
   'window:get-state': empty,
   'window:minimize': empty,
   'window:toggle-maximize': empty,

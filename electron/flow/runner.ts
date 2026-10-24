@@ -3,7 +3,7 @@ import type { AssertionResult, LogEntry } from '@shared/types'
 import { IpcErrorRaised } from '@shared/types'
 import type { EventName, EventPayload } from '@shared/channels'
 import type { Repos } from '../db/repo'
-import type { RunnerItem, RunnerItemStatus } from '../db/repo/runner.repo'
+import type { RunnerItem, RunnerItemStatus, RunnerRun } from '../db/repo/runner.repo'
 import type { RequestFlow } from './request'
 import type { CancelRegistry } from '../infra/cancel-registry'
 
@@ -20,11 +20,20 @@ export interface RunnerStartInput {
   timeoutMs?: number
 }
 
+export interface RunnerFinishCtx {
+  /** 调用方的 cancelId：`task:` 前缀表示由定时任务触发，通知归任务侧发 */
+  cancelId: string
+  abortedByUser: boolean
+  abortedByFail: boolean
+}
+
 export interface RunnerDeps {
   repos: Repos
   flow: RequestFlow
   cancel: CancelRegistry
   emit: <K extends EventName>(channel: K, payload: EventPayload<K>) => void
+  /** 一次运行结束的统一出口：GUI 靠进度事件，通知体系靠这里（15 号文档 §1） */
+  onRunFinished?: (run: RunnerRun, ctx: RunnerFinishCtx) => void
 }
 
 interface ProgressEvent {
@@ -36,6 +45,12 @@ interface ProgressEvent {
 interface Target {
   id: string
   name: string
+}
+
+/** stop 只负责停循环，stoppedBy 记录为什么停：取消与遇错即停在通知上要区分 */
+interface RunState {
+  stop: boolean
+  stoppedBy: 'user' | 'fail' | null
 }
 
 /** 集合内接口的执行顺序：集合自身接口 → 子集合递归（05 号文档 §5 模式 B） */
@@ -82,7 +97,7 @@ const verdict = (
 }
 
 export class RunnerFlow {
-  private readonly active = new Map<string, { stop: boolean }>()
+  private readonly active = new Map<string, RunState>()
   private readonly pending = new Map<string, Promise<void>>()
 
   constructor(private readonly deps: RunnerDeps) {}
@@ -136,7 +151,7 @@ export class RunnerFlow {
       iterationCount,
     })
 
-    const state = { stop: false }
+    const state: RunState = { stop: false, stoppedBy: null }
     this.active.set(runId, state)
 
     const loop = this.loop({ runId, targets, rows, iterationCount, input, state, envProjectId })
@@ -147,7 +162,10 @@ export class RunnerFlow {
 
   cancel(runId: string): void {
     const state = this.active.get(runId)
-    if (state) state.stop = true
+    if (state) {
+      state.stop = true
+      state.stoppedBy = 'user'
+    }
     this.deps.cancel.abort(`runner:${runId}`)
   }
 
@@ -162,7 +180,7 @@ export class RunnerFlow {
     rows: Record<string, string>[]
     iterationCount: number
     input: RunnerStartInput
-    state: { stop: boolean }
+    state: RunState
     envProjectId: string
   }): Promise<void> {
     const { repos } = this.deps
@@ -281,6 +299,7 @@ export class RunnerFlow {
 
         if (input.stopOnFail && saved.status !== 'passed' && saved.status !== 'skipped') {
           state.stop = true
+          state.stoppedBy = 'fail'
         }
         if (endIteration) break
         if (input.delayMs && input.delayMs > 0 && !state.stop) {
@@ -293,6 +312,14 @@ export class RunnerFlow {
     repos.runner.finishRun({ runId, passed, failed, skipped, report: { passed, failed, skipped } })
     this.active.delete(runId)
     this.pending.delete(runId)
+    const run = repos.runner.get(runId)
+    if (run) {
+      this.deps.onRunFinished?.(run, {
+        cancelId: input.cancelId,
+        abortedByUser: state.stoppedBy === 'user',
+        abortedByFail: state.stoppedBy === 'fail',
+      })
+    }
     this.deps.emit('event:runner-progress', {
       runId,
       item: {

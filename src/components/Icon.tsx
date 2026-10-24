@@ -78,6 +78,25 @@ const PATHS = {
       <path d="M8 9V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2.5h-15z" />
+      <path d="M10 18.5a2 2 0 0 0 4 0" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 11v5M12 8h.01" />
+    </>
+  ),
+  play: <path d="M8 5l11 7-11 7z" />,
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+    </>
+  ),
 } as const
 
 export type IconName = keyof typeof PATHS

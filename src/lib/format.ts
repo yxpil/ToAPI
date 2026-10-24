@@ -18,3 +18,20 @@ export const dayLabel = (ts: number): string => {
   if (diffDays === 1) return '昨天'
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
+
+/** 通知条目与任务下次触发用的相对时间（15 号文档 §5） */
+export const relTime = (ts: number, now = Date.now()): string => {
+  const diff = now - ts
+  const abs = Math.abs(diff)
+  const units: [number, string][] = [
+    [60_000, '分钟'],
+    [3_600_000, '小时'],
+    [86_400_000, '天'],
+  ]
+  let text = `${Math.round(abs / 1000)} 秒`
+  for (const [ms, name] of units) {
+    if (abs < ms) break
+    text = `${Math.round(abs / ms)} ${name}`
+  }
+  return diff >= 0 ? `${text}前` : `${text}后`
+}
