@@ -842,6 +842,15 @@ try {
   await app.waitFor(`window.__h.val('接口名称') === '查订单'`, '重新选中查订单')
 
   // ── 三栏拖宽 + 分屏方向 + 命令面板（06 号文档 §4、§5）──
+  // 布局断言必须在固定视口下做：CI runner 的窗口尺寸与 DPI 跟本机不同，
+  // 否则「URL ≥200px」这类阈值会因环境抖动误判（Windows runner 上实测 187px）。
+  await app.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 800,
+    deviceScaleFactor: 1,
+    mobile: false,
+  })
+  await wait(400)
   await app.js(`(() => {
     const s = document.querySelector('[data-testid="splitter-tree"]')
     const r = s.getBoundingClientRect()
@@ -908,6 +917,8 @@ try {
   if (report.orientationPref !== '"right"') {
     throw new Error(`分屏方向未持久化：${report.orientationPref}`)
   }
+  await app.send('Emulation.clearDeviceMetricsOverride')
+  await wait(300)
 
   await app.js(`window.__h.key('k', { ctrlKey: true })`)
   await app.waitFor(`!!document.querySelector('[data-testid="command-palette"]')`, '命令面板打开')

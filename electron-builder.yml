@@ -56,10 +56,7 @@ linux:
         - x64
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
   category: Development
-  desktop:
-    Name: ToAPI
-    Comment: 本地 API 请求与测试工具
-    Categories: Development
+  # 桌面项由 builder 按 productName/description 自动生成；electron-builder 26 不接受内联 desktop 配置
 
 # macOS：无开发者证书 → 不出公证包，产物为未签名 dmg/zip，首次启动需右键打开绕过 Gatekeeper
 mac:

@@ -78,13 +78,26 @@ const rewind = (taskId: string): void => {
 /** 等两个 tick：第一个用来重新对齐排期，第二个才真正触发 */
 const settle = (): Promise<void> => wait(180)
 
+/** 轮询到条件成立，避免"固定 sleep"在慢机器上误判 */
+async function until(label: string, predicate: () => boolean, timeoutMs = 4000): Promise<void> {
+  for (let waited = 0; waited < timeoutMs; waited += 50) {
+    if (predicate()) return
+    await wait(50)
+  }
+  throw new Error(`等待超时：${label}`)
+}
+
 const services: ScheduleService[] = []
 
+/**
+ * 间隔默认取 1 小时：这些用例靠"把 next_run_at 拨回过去"手工驱动触发，
+ * 用短间隔会让 epoch 对齐的自然触发混进来，排队数与并发数就不再确定。
+ */
 const mkTask = (over: Partial<NewScheduleTask> = {}): NewScheduleTask => ({
   name: '策略任务',
   targetType: 'collection',
   targetId: collectionId,
-  spec: { kind: 'interval', everyMs: 1000 },
+  spec: { kind: 'interval', everyMs: 3_600_000 },
   envId,
   ...over,
 })
@@ -204,8 +217,7 @@ describe('overlap 策略（12 号文档 §1/§5）', () => {
     stub.release()
     await settle()
     rewind(view.id)
-    await settle()
-    expect(stub.started).toBe(2)
+    await until('放行后按新周期继续触发', () => stub.started === 2)
     stub.release()
     service.stop()
   })
@@ -228,6 +240,7 @@ describe('overlap 策略（12 号文档 §1/§5）', () => {
       stub.release()
       await wait(60)
     }
+    await until('排队中的 3 次全部放行', () => stub.started === 4)
     expect(stub.started).toBe(4)
     service.stop()
   })
@@ -273,8 +286,7 @@ describe('时钟与目标失效', () => {
     const service = build(kernel.runner)
     service.start()
     rewind(task.id)
-    await wait(200)
-    expect(kernel.repos.schedule.get(task.id)?.enabled).toBe(false)
+    await until('任务因目标失效被停用', () => kernel.repos.schedule.get(task.id)?.enabled === false)
     // 启动失败也要留痕，通知中心里能看到是任务出错而不是静默消失
     const failed = kernel.repos.notification.list({ type: 'task.finished', limit: 10 }).items
     expect(failed.some((n) => n.level === 'error')).toBe(true)
